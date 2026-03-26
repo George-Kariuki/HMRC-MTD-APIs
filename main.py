@@ -26,6 +26,7 @@ _startup_logger.info("HMRC_CLIENT_ID loaded: %s", os.getenv("HMRC_CLIENT_ID", "N
 
 from auth import build_auth_url, exchange_code_for_tokens
 from database import init_db
+from hmrc_client import _resolve_vendor_ip
 from routes import router
 
 
@@ -33,8 +34,15 @@ from routes import router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialise SQLite schema on startup."""
+    """
+    Startup tasks:
+      1. Initialise SQLite schema
+      2. Pre-warm vendor IP detection so the first API call has no extra latency.
+         If VENDOR_PUBLIC_IP env var is set, this is a no-op.
+    """
     init_db()
+    vendor_ip = _resolve_vendor_ip()
+    _startup_logger.info("Gov-Vendor-Public-IP will be: %s", vendor_ip)
     yield
 
 

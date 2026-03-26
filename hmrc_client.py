@@ -11,6 +11,7 @@ Fraud Prevention header spec:
 """
 
 import ipaddress
+import logging
 import os
 import random
 import uuid
@@ -21,6 +22,8 @@ from urllib.parse import quote
 import httpx
 from fastapi import HTTPException
 
+logger = logging.getLogger(__name__)
+
 # ── Configuration (override via environment variables) ───────────────────────────
 
 HMRC_BASE = os.getenv("HMRC_BASE_URL", "https://test-api.service.hmrc.gov.uk")
@@ -29,11 +32,10 @@ HMRC_BASE = os.getenv("HMRC_BASE_URL", "https://test-api.service.hmrc.gov.uk")
 VENDOR_VERSION      = os.getenv("VENDOR_VERSION",      "PropertyLandlordApp=1.0.0")
 VENDOR_PRODUCT_NAME = os.getenv("VENDOR_PRODUCT_NAME", "Property%20Landlord%20MTD")
 VENDOR_LICENSE_IDS  = os.getenv("VENDOR_LICENSE_IDS",  "property-landlord=00000000-0000-0000-0000-000000000001")
-VENDOR_PUBLIC_IP    = os.getenv("VENDOR_PUBLIC_IP",     "198.51.100.2")
 
 # When the inbound request has no real client public IP (localhost, private LAN),
-# use this RFC 5737 TEST-NET-2 address so HMRC's validator accepts sandbox traffic.
-# Production: terminate TLS on a reverse proxy and set X-Forwarded-For to the end-user's public IP.
+# use this RFC 5737 TEST-NET address. Sandbox-safe; real deployments should ensure
+# X-Forwarded-For carries the end-user's public IP from the edge proxy.
 FRAUD_CLIENT_PUBLIC_IP_FALLBACK = os.getenv(
     "FRAUD_CLIENT_PUBLIC_IP_FALLBACK", "198.51.100.1"
 )
@@ -41,6 +43,51 @@ FRAUD_CLIENT_PUBLIC_IP_FALLBACK = os.getenv(
 # ── Device ID — persists for the lifetime of the server process ──────────────────
 # HMRC expects this to be stable across requests from the same "device" (server).
 _SERVER_DEVICE_ID = str(uuid.uuid4())
+
+# ── Vendor public IP — auto-detected at startup ───────────────────────────────────
+# VENDOR_PUBLIC_IP env var takes priority (set it if you have a static IP).
+# Otherwise we call ipify.org once per process to get the server's current outbound
+# IP. On Vercel/serverless, IPs shift between cold starts — that's fine; HMRC only
+# requires a syntactically valid public IP for Gov-Vendor-Public-IP, not a
+# permanently fixed one.
+
+_DETECTED_VENDOR_IP: Optional[str] = None
+
+
+def _resolve_vendor_ip() -> str:
+    """
+    Return the vendor public IP to use in Gov-Vendor-Public-IP.
+
+    Priority:
+      1. VENDOR_PUBLIC_IP env var (explicit override — use if you have a static IP)
+      2. Cached auto-detected IP from ipify.org (fetched once per process)
+      3. FRAUD_CLIENT_PUBLIC_IP_FALLBACK (TEST-NET 198.51.100.2 — sandbox-safe fallback)
+    """
+    global _DETECTED_VENDOR_IP
+
+    env_ip = os.getenv("VENDOR_PUBLIC_IP", "").strip()
+    if env_ip:
+        return env_ip
+
+    if _DETECTED_VENDOR_IP:
+        return _DETECTED_VENDOR_IP
+
+    # Auto-detect outbound IP using ipify (plain-text endpoint, no auth required)
+    try:
+        resp = httpx.get("https://api4.ipify.org", timeout=4)
+        ip = resp.text.strip()
+        # Validate it's a real public IP before caching
+        addr = ipaddress.ip_address(ip)
+        if not _must_use_fallback_ip(addr):
+            _DETECTED_VENDOR_IP = ip
+            logger.info("Auto-detected vendor public IP: %s", ip)
+            return ip
+    except Exception as exc:
+        logger.warning("Could not auto-detect vendor IP from ipify: %s", exc)
+
+    fallback = os.getenv("VENDOR_PUBLIC_IP_FALLBACK", "198.51.100.2")
+    logger.info("Using vendor IP fallback: %s", fallback)
+    return fallback
 
 
 # ── Fraud Prevention header builder ─────────────────────────────────────────────
@@ -132,8 +179,7 @@ def build_fraud_headers(client_public_ip: str, client_user_id: str = "none") -> 
     public_client_ip = _coerce_fraud_ip(
         client_public_ip, FRAUD_CLIENT_PUBLIC_IP_FALLBACK
     )
-    vendor_fb = os.getenv("VENDOR_PUBLIC_IP_FALLBACK", "198.51.100.2").strip()
-    vendor_ip = _coerce_fraud_ip(VENDOR_PUBLIC_IP, vendor_fb)
+    vendor_ip = _resolve_vendor_ip()
 
     return {
         # ── Connection method ────────────────────────────────────────────────────
