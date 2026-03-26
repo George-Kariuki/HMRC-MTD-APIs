@@ -126,6 +126,14 @@ async def auth_callback(code: str, state: str, request: Request):
     )
 
 
+# ── Root ──────────────────────────────────────────────────────────────────────────
+
+@app.get("/", tags=["Health"], include_in_schema=False)
+async def root():
+    """Root redirect — go to /docs for the interactive API reference."""
+    return RedirectResponse(url="/docs", status_code=302)
+
+
 # ── Health check ──────────────────────────────────────────────────────────────────
 
 @app.get("/health", tags=["Health"])
