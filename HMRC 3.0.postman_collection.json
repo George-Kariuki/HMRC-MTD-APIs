@@ -1,0 +1,3901 @@
+{
+  "info": {
+    "_postman_id": "a19b6180-68cc-41ac-9da5-77e66d19d63a",
+    "name": "HMRC 3.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "52497097",
+    "_collection_link": "https://go.postman.co/collection/52497097-a19b6180-68cc-41ac-9da5-77e66d19d63a?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Test Fraud Prevention Headers API",
+      "item": [
+        {
+          "name": "Validate fraud prevention headers",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Ensure access token exists",
+                  "const token = pm.variables.get('access_token');",
+                  "if (!token) {",
+                  "  throw new Error('Missing {{access_token}}. Set it as a global/environment/collection variable before running this request.');",
+                  "}",
+                  "",
+                  "function isoNow() {",
+                  "  return new Date().toISOString();",
+                  "}",
+                  "",
+                  "function uuidv4() {",
+                  "  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {",
+                  "    const r = (Math.random() * 16) | 0;",
+                  "    const v = c === 'x' ? r : (r & 0x3) | 0x8;",
+                  "    return v.toString(16);",
+                  "  });",
+                  "}",
+                  "",
+                  "// Generate gov_client_device_id once (persist across runs), reset if placeholder",
+                  "if (!pm.collectionVariables.get('gov_client_device_id') || pm.collectionVariables.get('gov_client_device_id') === 'device-12345') {",
+                  "  pm.collectionVariables.set('gov_client_device_id', uuidv4());",
+                  "}",
+                  "",
+                  "// Set placeholder variables only if not already set",
+                  "if (!pm.collectionVariables.get('gov_client_public_ip')) {",
+                  "  pm.collectionVariables.set('gov_client_public_ip', '198.51.100.1');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_client_public_port')) {",
+                  "  pm.collectionVariables.set('gov_client_public_port', '49673');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_client_user_id')) {",
+                  "  pm.collectionVariables.set('gov_client_user_id', 'none');",
+                  "}",
+                  "",
+                  "// Always regenerate local IPs as real private IPv4 addresses",
+                  "function randomPrivateIP() {",
+                  "  return '10.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255) + '.' + (1 + Math.floor(Math.random()*254));",
+                  "}",
+                  "pm.collectionVariables.set('gov_client_local_ips', randomPrivateIP() + ',' + randomPrivateIP());",
+                  "",
+                  "if (!pm.collectionVariables.get('gov_vendor_version')) {",
+                  "  pm.collectionVariables.set('gov_vendor_version', 'Postman-MTD=1.0.0');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_vendor_public_ip')) {",
+                  "  pm.collectionVariables.set('gov_vendor_public_ip', '198.51.100.2');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_vendor_product_name')) {",
+                  "  pm.collectionVariables.set('gov_vendor_product_name', 'Postman%20MTD%20Bridge');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_vendor_license_ids')) {",
+                  "  pm.collectionVariables.set('gov_vendor_license_ids', 'postman=00000000-0000-0000-0000-000000000000');",
+                  "}",
+                  "",
+                  "// Always regenerate timestamps",
+                  "pm.collectionVariables.set('gov_client_public_ip_ts', isoNow());",
+                  "pm.collectionVariables.set('gov_client_local_ips_ts', isoNow());",
+                  "const mfaTs = isoNow();",
+                  "pm.collectionVariables.set('gov_client_mfa_ts', mfaTs);",
+                  "",
+                  "// Build Gov-Client-Multi-Factor header value with percent-encoded timestamp",
+                  "const mfaHeaderValue = 'type=OTHER&timestamp=' + encodeURIComponent(mfaTs) + '&unique-reference=ref-123456';",
+                  "pm.request.headers.upsert({ key: 'Gov-Client-Multi-Factor', value: mfaHeaderValue });"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has specVersion/code/message', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.be.an('object');",
+                  "  pm.expect(json).to.have.property('specVersion');",
+                  "  pm.expect(json).to.have.property('code');",
+                  "  pm.expect(json).to.have.property('message');",
+                  "});",
+                  "",
+                  "// Log errors/warnings when validation fails",
+                  "(() => {",
+                  "  let json;",
+                  "  try {",
+                  "    json = pm.response.json();",
+                  "  } catch (e) {",
+                  "    return;",
+                  "  }",
+                  "",
+                  "  if (json && json.code && json.code !== 'VALID_HEADERS') {",
+                  "    const errors = json.errors || [];",
+                  "    const warnings = json.warnings || [];",
+                  "",
+                  "    // Prefer Postman Console for diagnostics",
+                  "    if (errors.length) {",
+                  "      console.warn('Fraud prevention header validation errors:', errors);",
+                  "    }",
+                  "    if (warnings.length) {",
+                  "      console.warn('Fraud prevention header validation warnings:', warnings);",
+                  "    }",
+                  "  }",
+                  "})();",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.hmrc.1.0+json"
+              },
+              {
+                "key": "Gov-Test-Scenario",
+                "value": "DYNAMIC",
+                "disabled": true
+              },
+              {
+                "key": "Gov-Client-Connection-Method",
+                "value": "WEB_APP_VIA_SERVER"
+              },
+              {
+                "key": "Gov-Client-Public-IP",
+                "value": "{{gov_client_public_ip}}"
+              },
+              {
+                "key": "Gov-Client-Public-IP-Timestamp",
+                "value": "{{gov_client_public_ip_ts}}"
+              },
+              {
+                "key": "Gov-Client-Public-Port",
+                "value": "{{gov_client_public_port}}"
+              },
+              {
+                "key": "Gov-Client-Device-ID",
+                "value": "{{gov_client_device_id}}"
+              },
+              {
+                "key": "Gov-Client-User-IDs",
+                "value": "user={{gov_client_user_id}}"
+              },
+              {
+                "key": "Gov-Client-Timezone",
+                "value": "UTC+00:00"
+              },
+              {
+                "key": "Gov-Client-Local-IPs",
+                "value": "{{gov_client_local_ips}}"
+              },
+              {
+                "key": "Gov-Client-Local-IPs-Timestamp",
+                "value": "{{gov_client_local_ips_ts}}"
+              },
+              {
+                "key": "Gov-Client-Screens",
+                "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+              },
+              {
+                "key": "Gov-Client-Window-Size",
+                "value": "width=1224&height=800"
+              },
+              {
+                "key": "Gov-Client-Browser-Plugins",
+                "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+              },
+              {
+                "key": "Gov-Client-Browser-JS-User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+              },
+              {
+                "key": "Gov-Client-Browser-Do-Not-Track",
+                "value": "true"
+              },
+              {
+                "key": "Gov-Vendor-Version",
+                "value": "{{gov_vendor_version}}"
+              },
+              {
+                "key": "Gov-Vendor-Public-IP",
+                "value": "{{gov_vendor_public_ip}}"
+              },
+              {
+                "key": "Gov-Vendor-Forwarded",
+                "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+              },
+              {
+                "key": "Gov-Vendor-Product-Name",
+                "value": "{{gov_vendor_product_name}}"
+              },
+              {
+                "key": "Gov-Vendor-License-IDs",
+                "value": "{{gov_vendor_license_ids}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Gov-Client-MAC-Addresses",
+                "value": "00-14-22-01-23-45",
+                "disabled": true
+              },
+              {
+                "key": "Gov-Client-User-Agent",
+                "value": "PostmanRuntime/7.0",
+                "disabled": true
+              },
+              {
+                "key": "Gov-Client-Multi-Factor",
+                "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+              }
+            ],
+            "url": {
+              "raw": "https://test-api.service.hmrc.gov.uk/test/fraud-prevention-headers/validate",
+              "protocol": "https",
+              "host": [
+                "test-api",
+                "service",
+                "hmrc",
+                "gov",
+                "uk"
+              ],
+              "path": [
+                "test",
+                "fraud-prevention-headers",
+                "validate"
+              ]
+            },
+            "description": "Generated from cURL: curl --location --request GET 'https://test-api.service.hmrc.gov.uk/test/fraud-prevention-headers/validate' --header 'Accept: application/vnd.hmrc.1.0+json' --header 'Authorization: Bearer {{access_token}}' --header 'Gov-Client-Connection-Method: WEB_APP_VIA_SERVER' --header 'Gov-Client-Device-ID: {{gov_client_device_id}}' --header 'Gov-Client-Local-IPs: 192.0.2.1' --header 'Gov-Client-Local-IPs-Timestamp: {{gov_client_local_ips_ts}}' --header 'Gov-Client-MAC-Addresses: 00-14-22-01-23-45' --header 'Gov-Client-Multi-Factor: type=OTHER;timestamp={{gov_client_mfa_ts}};unique-reference=ref-123456' --header 'Gov-Client-Timezone: UTC+00:00' --header 'Gov-Client-User-Agent: PostmanRuntime/7.0' --header 'Gov-Client-Window-Size: 1920x1080' --header 'Gov-Client-Screens: width=1920&height=1080&scaling-factor=1&colour-depth=24' --header 'Gov-Client-Public-IP: 198.51.100.1' --header 'Gov-Client-Public-IP-Timestamp: {{gov_client_public_ip_ts}}' --header 'Gov-Vendor-Forwarded: by=Postman;for=ShayonM;host=test-api.service.hmrc.gov.uk;proto=https' --header 'Gov-Vendor-License-IDs: postman=00000000-0000-0000-0000-000000000000' --header 'Gov-Vendor-Product-Name: Postman' --header 'Gov-Client-Browser-Plugins: plugin=Shockwave%20Flash&version=32.0.0.0' --header 'Gov-Client-Browser-JS-User-Agent: navigator.userAgent=Postman'"
+          },
+          "response": [
+            {
+              "name": "Validate fraud prevention headers",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/vnd.hmrc.1.0+json"
+                  },
+                  {
+                    "key": "Gov-Test-Scenario",
+                    "value": "DYNAMIC",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-Connection-Method",
+                    "value": "WEB_APP_VIA_SERVER"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP",
+                    "value": "{{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP-Timestamp",
+                    "value": "{{gov_client_public_ip_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-Port",
+                    "value": "{{gov_client_public_port}}"
+                  },
+                  {
+                    "key": "Gov-Client-Device-ID",
+                    "value": "{{gov_client_device_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-User-IDs",
+                    "value": "user={{gov_client_user_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-Timezone",
+                    "value": "UTC+00:00"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs",
+                    "value": "{{gov_client_local_ips}}"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs-Timestamp",
+                    "value": "{{gov_client_local_ips_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Screens",
+                    "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                  },
+                  {
+                    "key": "Gov-Client-Window-Size",
+                    "value": "width=1224&height=800"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Plugins",
+                    "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-JS-User-Agent",
+                    "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Do-Not-Track",
+                    "value": "true"
+                  },
+                  {
+                    "key": "Gov-Vendor-Version",
+                    "value": "{{gov_vendor_version}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Public-IP",
+                    "value": "{{gov_vendor_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Forwarded",
+                    "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Product-Name",
+                    "value": "{{gov_vendor_product_name}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-License-IDs",
+                    "value": "{{gov_vendor_license_ids}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}"
+                  },
+                  {
+                    "key": "Gov-Client-MAC-Addresses",
+                    "value": "00-14-22-01-23-45",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-User-Agent",
+                    "value": "PostmanRuntime/7.0",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-Multi-Factor",
+                    "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                  }
+                ],
+                "url": {
+                  "raw": "https://test-api.service.hmrc.gov.uk/test/fraud-prevention-headers/validate",
+                  "protocol": "https",
+                  "host": [
+                    "test-api",
+                    "service",
+                    "hmrc",
+                    "gov",
+                    "uk"
+                  ],
+                  "path": [
+                    "test",
+                    "fraud-prevention-headers",
+                    "validate"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": ":status",
+                  "value": 200
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "content-length",
+                  "value": "260"
+                },
+                {
+                  "key": "date",
+                  "value": "Mon, 23 Mar 2026 13:21:48 GMT"
+                },
+                {
+                  "key": "x-content-type-options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "no-cache,no-store,max-age=0"
+                },
+                {
+                  "key": "strict-transport-security",
+                  "value": "max-age=31536000;"
+                },
+                {
+                  "key": "vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "x-envoy-upstream-service-time",
+                  "value": "17"
+                },
+                {
+                  "key": "content-security-policy",
+                  "value": "default-src 'self'"
+                },
+                {
+                  "key": "x-frame-options",
+                  "value": "SAMEORIGIN"
+                },
+                {
+                  "key": "x-cache",
+                  "value": "Miss from cloudfront"
+                },
+                {
+                  "key": "via",
+                  "value": "1.1 0316c07369e8911f4fffe6ae5475e30c.cloudfront.net (CloudFront)"
+                },
+                {
+                  "key": "x-amz-cf-pop",
+                  "value": "LHR50-P6"
+                },
+                {
+                  "key": "x-amz-cf-id",
+                  "value": "IckW5KXySMb01pjpN9FCxo6Qh_Fm31DGT_Q1X4mnjn4U755ATplxzA=="
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"specVersion\": \"3.3\",\n    \"code\": \"VALID_HEADERS\",\n    \"message\": \"All headers required for your connection method have been supplied and all appear to be valid. Validation is based on a single request. We have access to all requests and can draw additional conclusions.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Business Details API",
+      "item": [
+        {
+          "name": "List all businesses",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Ensure access token exists",
+                  "const token = pm.variables.get('access_token');",
+                  "if (!token) {",
+                  "  throw new Error('Missing {{access_token}}. Set it as a global/environment/collection variable before running this request.');",
+                  "}",
+                  "",
+                  "function isoNow() {",
+                  "  return new Date().toISOString();",
+                  "}",
+                  "",
+                  "function uuidv4() {",
+                  "  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {",
+                  "    const r = (Math.random() * 16) | 0;",
+                  "    const v = c === 'x' ? r : (r & 0x3) | 0x8;",
+                  "    return v.toString(16);",
+                  "  });",
+                  "}",
+                  "",
+                  "// Generate gov_client_device_id once (persist across runs)",
+                  "if (!pm.collectionVariables.get('gov_client_device_id') || pm.collectionVariables.get('gov_client_device_id') === 'device-12345') {",
+                  "  pm.collectionVariables.set('gov_client_device_id', uuidv4());",
+                  "}",
+                  "",
+                  "// Set placeholder variables only if not already set",
+                  "if (!pm.collectionVariables.get('gov_client_public_ip')) {",
+                  "  pm.collectionVariables.set('gov_client_public_ip', '198.51.100.1');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_client_public_port')) {",
+                  "  pm.collectionVariables.set('gov_client_public_port', '49673');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_client_user_id')) {",
+                  "  pm.collectionVariables.set('gov_client_user_id', 'none');",
+                  "}",
+                  "",
+                  "// Always regenerate local IPs as real private IPv4 addresses",
+                  "function randomPrivateIP() {",
+                  "  return '10.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255) + '.' + (1 + Math.floor(Math.random()*254));",
+                  "}",
+                  "pm.collectionVariables.set('gov_client_local_ips', randomPrivateIP() + ',' + randomPrivateIP());",
+                  "",
+                  "if (!pm.collectionVariables.get('gov_vendor_version')) {",
+                  "  pm.collectionVariables.set('gov_vendor_version', 'Postman-MTD=1.0.0');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_vendor_public_ip')) {",
+                  "  pm.collectionVariables.set('gov_vendor_public_ip', '198.51.100.2');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_vendor_product_name')) {",
+                  "  pm.collectionVariables.set('gov_vendor_product_name', 'Postman%20MTD%20Bridge');",
+                  "}",
+                  "if (!pm.collectionVariables.get('gov_vendor_license_ids')) {",
+                  "  pm.collectionVariables.set('gov_vendor_license_ids', 'postman=00000000-0000-0000-0000-000000000000');",
+                  "}",
+                  "",
+                  "// Always regenerate timestamps",
+                  "pm.collectionVariables.set('gov_client_public_ip_ts', isoNow());",
+                  "pm.collectionVariables.set('gov_client_local_ips_ts', isoNow());",
+                  "const mfaTs = isoNow();",
+                  "pm.collectionVariables.set('gov_client_mfa_ts', mfaTs);",
+                  "",
+                  "// Build Gov-Client-Multi-Factor with percent-encoded timestamp",
+                  "const mfaHeaderValue = 'type=OTHER&timestamp=' + encodeURIComponent(mfaTs) + '&unique-reference=ref-123456';",
+                  "pm.request.headers.upsert({ key: 'Gov-Client-Multi-Factor', value: mfaHeaderValue });",
+                  "",
+                  "// Ensure nino is set",
+                  "if (!pm.collectionVariables.get('nino')) {",
+                  "  pm.collectionVariables.set('nino', 'AA999999A');",
+                  "  console.warn('nino not set — using placeholder AA999999A. Update collection variable nino with a real NINO.');",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is JSON', () => {",
+                  "  pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test('Response has listOfBusinesses array', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('listOfBusinesses');",
+                  "  pm.expect(json.listOfBusinesses).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Each business has businessId and typeOfBusiness', () => {",
+                  "  const json = pm.response.json();",
+                  "  json.listOfBusinesses.forEach((biz, i) => {",
+                  "    pm.expect(biz, `business[${i}]`).to.have.property('businessId');",
+                  "    pm.expect(biz, `business[${i}]`).to.have.property('typeOfBusiness');",
+                  "  });",
+                  "});",
+                  "",
+                  "// Auto-store first businessId for use in downstream requests",
+                  "const json = pm.response.json();",
+                  "if (json.listOfBusinesses && json.listOfBusinesses.length > 0) {",
+                  "  const firstId = json.listOfBusinesses[0].businessId;",
+                  "  pm.collectionVariables.set('business_id', firstId);",
+                  "  console.log('Stored business_id:', firstId);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.hmrc.2.0+json"
+              },
+              {
+                "key": "Gov-Test-Scenario",
+                "value": "DEFAULT"
+              },
+              {
+                "key": "Gov-Client-Connection-Method",
+                "value": "WEB_APP_VIA_SERVER"
+              },
+              {
+                "key": "Gov-Client-Public-IP",
+                "value": "{{gov_client_public_ip}}"
+              },
+              {
+                "key": "Gov-Client-Public-IP-Timestamp",
+                "value": "{{gov_client_public_ip_ts}}"
+              },
+              {
+                "key": "Gov-Client-Public-Port",
+                "value": "{{gov_client_public_port}}"
+              },
+              {
+                "key": "Gov-Client-Device-ID",
+                "value": "{{gov_client_device_id}}"
+              },
+              {
+                "key": "Gov-Client-User-IDs",
+                "value": "user={{gov_client_user_id}}"
+              },
+              {
+                "key": "Gov-Client-Timezone",
+                "value": "UTC+00:00"
+              },
+              {
+                "key": "Gov-Client-Local-IPs",
+                "value": "{{gov_client_local_ips}}"
+              },
+              {
+                "key": "Gov-Client-Local-IPs-Timestamp",
+                "value": "{{gov_client_local_ips_ts}}"
+              },
+              {
+                "key": "Gov-Client-Screens",
+                "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+              },
+              {
+                "key": "Gov-Client-Window-Size",
+                "value": "width=1224&height=800"
+              },
+              {
+                "key": "Gov-Client-Browser-Plugins",
+                "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+              },
+              {
+                "key": "Gov-Client-Browser-JS-User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+              },
+              {
+                "key": "Gov-Client-Browser-Do-Not-Track",
+                "value": "true"
+              },
+              {
+                "key": "Gov-Client-Multi-Factor",
+                "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+              },
+              {
+                "key": "Gov-Vendor-Version",
+                "value": "{{gov_vendor_version}}"
+              },
+              {
+                "key": "Gov-Vendor-Public-IP",
+                "value": "{{gov_vendor_public_ip}}"
+              },
+              {
+                "key": "Gov-Vendor-Forwarded",
+                "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+              },
+              {
+                "key": "Gov-Vendor-Product-Name",
+                "value": "{{gov_vendor_product_name}}"
+              },
+              {
+                "key": "Gov-Vendor-License-IDs",
+                "value": "{{gov_vendor_license_ids}}"
+              },
+              {
+                "key": "Gov-Client-MAC-Addresses",
+                "value": "00-14-22-01-23-45"
+              },
+              {
+                "key": "Gov-Client-User-Agent",
+                "value": "PostmanRuntime/7.0"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "https://test-api.service.hmrc.gov.uk/individuals/business/details/{{nino}}/list",
+              "protocol": "https",
+              "host": [
+                "test-api",
+                "service",
+                "hmrc",
+                "gov",
+                "uk"
+              ],
+              "path": [
+                "individuals",
+                "business",
+                "details",
+                "{{nino}}",
+                "list"
+              ]
+            },
+            "description": "Generated from cURL: curl --location --request GET 'https://test-api.service.hmrc.gov.uk/individuals/business/details/{{nino}}/list' --header 'Accept: application/vnd.hmrc.2.0+json' --header 'Gov-Test-Scenario: DEFAULT' --header 'Gov-Client-Connection-Method: WEB_APP_VIA_SERVER' --header 'Gov-Client-Public-IP: {{gov_client_public_ip}}' --header 'Gov-Client-Public-IP-Timestamp: {{gov_client_public_ip_ts}}' --header 'Gov-Client-Public-Port: {{gov_client_public_port}}' --header 'Gov-Client-Device-ID: {{gov_client_device_id}}' --header 'Gov-Client-User-IDs: user={{gov_client_user_id}}' --header 'Gov-Client-Timezone: UTC+00:00' --header 'Gov-Client-Local-IPs: {{gov_client_local_ips}}' --header 'Gov-Client-Local-IPs-Timestamp: {{gov_client_local_ips_ts}}' --header 'Gov-Client-Screens: width=1920&height=1080&scaling-factor=1&colour-depth=32' --header 'Gov-Client-Window-Size: width=1224&height=800' --header 'Gov-Client-Browser-Plugins: PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF' --header 'Gov-Client-Browser-JS-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36' --header 'Gov-Client-Browser-Do-Not-Track: true' --header 'Gov-Client-Multi-Factor: type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456' --header 'Gov-Vendor-Version: {{gov_vendor_version}}' --header 'Gov-Vendor-Public-IP: {{gov_vendor_public_ip}}' --header 'Gov-Vendor-Forwarded: by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}' --header 'Gov-Vendor-Product-Name: {{gov_vendor_product_name}}' --header 'Gov-Vendor-License-IDs: {{gov_vendor_license_ids}}' --header 'Gov-Client-MAC-Addresses: 00-14-22-01-23-45' --header 'Gov-Client-User-Agent: PostmanRuntime/7.0'"
+          },
+          "response": [
+            {
+              "name": "List all businesses",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/vnd.hmrc.2.0+json"
+                  },
+                  {
+                    "key": "Gov-Test-Scenario",
+                    "value": "DEFAULT"
+                  },
+                  {
+                    "key": "Gov-Client-Connection-Method",
+                    "value": "WEB_APP_VIA_SERVER"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP",
+                    "value": "{{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP-Timestamp",
+                    "value": "{{gov_client_public_ip_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-Port",
+                    "value": "{{gov_client_public_port}}"
+                  },
+                  {
+                    "key": "Gov-Client-Device-ID",
+                    "value": "{{gov_client_device_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-User-IDs",
+                    "value": "user={{gov_client_user_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-Timezone",
+                    "value": "UTC+00:00"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs",
+                    "value": "{{gov_client_local_ips}}"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs-Timestamp",
+                    "value": "{{gov_client_local_ips_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Screens",
+                    "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                  },
+                  {
+                    "key": "Gov-Client-Window-Size",
+                    "value": "width=1224&height=800"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Plugins",
+                    "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-JS-User-Agent",
+                    "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Do-Not-Track",
+                    "value": "true"
+                  },
+                  {
+                    "key": "Gov-Client-Multi-Factor",
+                    "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                  },
+                  {
+                    "key": "Gov-Vendor-Version",
+                    "value": "{{gov_vendor_version}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Public-IP",
+                    "value": "{{gov_vendor_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Forwarded",
+                    "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Product-Name",
+                    "value": "{{gov_vendor_product_name}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-License-IDs",
+                    "value": "{{gov_vendor_license_ids}}"
+                  },
+                  {
+                    "key": "Gov-Client-MAC-Addresses",
+                    "value": "00-14-22-01-23-45"
+                  },
+                  {
+                    "key": "Gov-Client-User-Agent",
+                    "value": "PostmanRuntime/7.0"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "https://test-api.service.hmrc.gov.uk/individuals/business/details/{{nino}}/list",
+                  "protocol": "https",
+                  "host": [
+                    "test-api",
+                    "service",
+                    "hmrc",
+                    "gov",
+                    "uk"
+                  ],
+                  "path": [
+                    "individuals",
+                    "business",
+                    "details",
+                    "{{nino}}",
+                    "list"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": ":status",
+                  "value": 200
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "content-length",
+                  "value": "116"
+                },
+                {
+                  "key": "date",
+                  "value": "Mon, 23 Mar 2026 13:27:02 GMT"
+                },
+                {
+                  "key": "x-frame-options",
+                  "value": "SAMEORIGIN"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "no-cache,no-store,max-age=0"
+                },
+                {
+                  "key": "strict-transport-security",
+                  "value": "max-age=31536000;"
+                },
+                {
+                  "key": "vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "x-content-type-options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "x-correlationid",
+                  "value": "fe2b82d8-82d8-4ad1-b56c-0cf73811608f"
+                },
+                {
+                  "key": "x-envoy-upstream-service-time",
+                  "value": "80"
+                },
+                {
+                  "key": "content-security-policy",
+                  "value": "default-src 'self'"
+                },
+                {
+                  "key": "x-cache",
+                  "value": "Miss from cloudfront"
+                },
+                {
+                  "key": "via",
+                  "value": "1.1 6208571a7dbb8796f3e06e3cf84a6ce6.cloudfront.net (CloudFront)"
+                },
+                {
+                  "key": "x-amz-cf-pop",
+                  "value": "LHR50-P6"
+                },
+                {
+                  "key": "x-amz-cf-id",
+                  "value": "7VAnauLAceYiFX49MsPn2MfBkOJAWJDraZX7Y9tp_-Q0YzL2SyJeWA=="
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"listOfBusinesses\": [\n        {\n            \"typeOfBusiness\": \"self-employment\",\n            \"businessId\": \"XBIS12345678901\",\n            \"tradingName\": \"Company X\"\n        }\n    ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Individual Calculations API",
+      "item": [
+        {
+          "name": "Trigger a Self Assessment Tax Calculation",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Ensure access token exists",
+                  "const token = pm.variables.get('access_token');",
+                  "if (!token) {",
+                  "  throw new Error('Missing {{access_token}}. Set it as a global/environment/collection variable.');",
+                  "}",
+                  "",
+                  "function isoNow() { return new Date().toISOString(); }",
+                  "",
+                  "function uuidv4() {",
+                  "  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {",
+                  "    const r = (Math.random() * 16) | 0;",
+                  "    const v = c === 'x' ? r : (r & 0x3) | 0x8;",
+                  "    return v.toString(16);",
+                  "  });",
+                  "}",
+                  "",
+                  "// Device ID — persist across runs",
+                  "if (!pm.collectionVariables.get('gov_client_device_id') || pm.collectionVariables.get('gov_client_device_id') === 'device-12345') {",
+                  "  pm.collectionVariables.set('gov_client_device_id', uuidv4());",
+                  "}",
+                  "",
+                  "if (!pm.collectionVariables.get('gov_client_public_ip')) pm.collectionVariables.set('gov_client_public_ip', '198.51.100.1');",
+                  "if (!pm.collectionVariables.get('gov_client_public_port')) pm.collectionVariables.set('gov_client_public_port', '49673');",
+                  "if (!pm.collectionVariables.get('gov_client_user_id')) pm.collectionVariables.set('gov_client_user_id', 'none');",
+                  "",
+                  "function randomPrivateIP() {",
+                  "  return '10.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255) + '.' + (1 + Math.floor(Math.random()*254));",
+                  "}",
+                  "pm.collectionVariables.set('gov_client_local_ips', randomPrivateIP() + ',' + randomPrivateIP());",
+                  "",
+                  "if (!pm.collectionVariables.get('gov_vendor_version')) pm.collectionVariables.set('gov_vendor_version', 'Postman-MTD=1.0.0');",
+                  "if (!pm.collectionVariables.get('gov_vendor_public_ip')) pm.collectionVariables.set('gov_vendor_public_ip', '198.51.100.2');",
+                  "if (!pm.collectionVariables.get('gov_vendor_product_name')) pm.collectionVariables.set('gov_vendor_product_name', 'Postman%20MTD%20Bridge');",
+                  "if (!pm.collectionVariables.get('gov_vendor_license_ids')) pm.collectionVariables.set('gov_vendor_license_ids', 'postman=00000000-0000-0000-0000-000000000000');",
+                  "",
+                  "// Refresh timestamps",
+                  "pm.collectionVariables.set('gov_client_public_ip_ts', isoNow());",
+                  "pm.collectionVariables.set('gov_client_local_ips_ts', isoNow());",
+                  "pm.collectionVariables.set('gov_client_mfa_ts', isoNow());",
+                  "",
+                  "if (!pm.collectionVariables.get('calculation_type')) {",
+                  "  pm.collectionVariables.set('calculation_type', 'in-year');",
+                  "  console.warn('calculation_type not set — defaulting to in-year. Options: in-year | intent-to-finalise | intent-to-amend (2025-26+)');",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 202 Accepted', () => {",
+                  "  pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "pm.test('Response is JSON', () => {",
+                  "  pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test('Response has calculationId', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('calculationId');",
+                  "  pm.expect(json.calculationId).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "// Auto-store calculationId for downstream requests",
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  if (json.calculationId) {",
+                  "    pm.collectionVariables.set('calculation_id', json.calculationId);",
+                  "    console.log('Stored calculation_id:', json.calculationId);",
+                  "  }",
+                  "} catch(e) {}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.hmrc.8.0+json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Gov-Test-Scenario",
+                "value": "DEFAULT",
+                "disabled": true
+              },
+              {
+                "key": "Gov-Client-Connection-Method",
+                "value": "WEB_APP_VIA_SERVER"
+              },
+              {
+                "key": "Gov-Client-Public-IP",
+                "value": "{{gov_client_public_ip}}"
+              },
+              {
+                "key": "Gov-Client-Public-IP-Timestamp",
+                "value": "{{gov_client_public_ip_ts}}"
+              },
+              {
+                "key": "Gov-Client-Public-Port",
+                "value": "{{gov_client_public_port}}"
+              },
+              {
+                "key": "Gov-Client-Device-ID",
+                "value": "{{gov_client_device_id}}"
+              },
+              {
+                "key": "Gov-Client-User-IDs",
+                "value": "user={{gov_client_user_id}}"
+              },
+              {
+                "key": "Gov-Client-Timezone",
+                "value": "UTC+00:00"
+              },
+              {
+                "key": "Gov-Client-Local-IPs",
+                "value": "{{gov_client_local_ips}}"
+              },
+              {
+                "key": "Gov-Client-Local-IPs-Timestamp",
+                "value": "{{gov_client_local_ips_ts}}"
+              },
+              {
+                "key": "Gov-Client-Screens",
+                "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+              },
+              {
+                "key": "Gov-Client-Window-Size",
+                "value": "width=1224&height=800"
+              },
+              {
+                "key": "Gov-Client-Browser-Plugins",
+                "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+              },
+              {
+                "key": "Gov-Client-Browser-JS-User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+              },
+              {
+                "key": "Gov-Client-Browser-Do-Not-Track",
+                "value": "true"
+              },
+              {
+                "key": "Gov-Client-Multi-Factor",
+                "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+              },
+              {
+                "key": "Gov-Vendor-Version",
+                "value": "{{gov_vendor_version}}"
+              },
+              {
+                "key": "Gov-Vendor-Public-IP",
+                "value": "{{gov_vendor_public_ip}}"
+              },
+              {
+                "key": "Gov-Vendor-Forwarded",
+                "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+              },
+              {
+                "key": "Gov-Vendor-Product-Name",
+                "value": "{{gov_vendor_product_name}}"
+              },
+              {
+                "key": "Gov-Vendor-License-IDs",
+                "value": "{{gov_vendor_license_ids}}"
+              },
+              {
+                "key": "Gov-Client-MAC-Addresses",
+                "value": "00-14-22-01-23-45",
+                "disabled": true
+              },
+              {
+                "key": "Gov-Client-User-Agent",
+                "value": "PostmanRuntime/7.0",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "file",
+              "file": {}
+            },
+            "url": {
+              "raw": "https://test-api.service.hmrc.gov.uk/individuals/calculations/{{nino}}/self-assessment/{{tax_year}}/trigger/{{calculation_type}}",
+              "protocol": "https",
+              "host": [
+                "test-api",
+                "service",
+                "hmrc",
+                "gov",
+                "uk"
+              ],
+              "path": [
+                "individuals",
+                "calculations",
+                "{{nino}}",
+                "self-assessment",
+                "{{tax_year}}",
+                "trigger",
+                "{{calculation_type}}"
+              ]
+            },
+            "description": "Generated from cURL: curl -X POST \"https://test-api.service.hmrc.gov.uk/individuals/calculations/{{nino}}/self-assessment/{{tax_year}}/trigger/{{calculation_type}}\" \\\n  -H \"Accept: application/vnd.hmrc.8.0+json\" \\\n  -H \"Content-Type: application/json\" \\\n  -H \"Authorization: Bearer {{access_token}}\" \\\n  -H \"Gov-Client-Connection-Method: WEB_APP_VIA_SERVER\" \\\n  -H \"Gov-Client-Public-IP: {{gov_client_public_ip}}\" \\\n  -H \"Gov-Client-Public-IP-Timestamp: {{gov_client_public_ip_ts}}\" \\\n  -H \"Gov-Client-Public-Port: {{gov_client_public_port}}\" \\\n  -H \"Gov-Client-Device-ID: {{gov_client_device_id}}\" \\\n  -H \"Gov-Client-User-IDs: user={{gov_client_user_id}}\" \\\n  -H \"Gov-Client-Timezone: UTC+00:00\" \\\n  -H \"Gov-Client-Local-IPs: {{gov_client_local_ips}}\" \\\n  -H \"Gov-Client-Local-IPs-Timestamp: {{gov_client_local_ips_ts}}\" \\\n  -H \"Gov-Client-Screens: width=1920&height=1080&scaling-factor=1&colour-depth=32\" \\\n  -H \"Gov-Client-Window-Size: width=1224&height=800\" \\\n  -H \"Gov-Client-Browser-Plugins: PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF\" \\\n  -H \"Gov-Client-Browser-JS-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36\" \\\n  -H \"Gov-Client-Browser-Do-Not-Track: true\" \\\n  -H \"Gov-Client-Multi-Factor: type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456\" \\\n  -H \"Gov-Vendor-Version: {{gov_vendor_version}}\" \\\n  -H \"Gov-Vendor-Public-IP: {{gov_vendor_public_ip}}\" \\\n  -H \"Gov-Vendor-Forwarded: by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}\" \\\n  -H \"Gov-Vendor-Product-Name: {{gov_vendor_product_name}}\" \\\n  -H \"Gov-Vendor-License-IDs: {{gov_vendor_license_ids}}\" \\\n  -d \"{}\""
+          },
+          "response": [
+            {
+              "name": "Trigger a Self Assessment Tax Calculation",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/vnd.hmrc.8.0+json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}"
+                  },
+                  {
+                    "key": "Gov-Test-Scenario",
+                    "value": "DEFAULT",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-Connection-Method",
+                    "value": "WEB_APP_VIA_SERVER"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP",
+                    "value": "{{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP-Timestamp",
+                    "value": "{{gov_client_public_ip_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-Port",
+                    "value": "{{gov_client_public_port}}"
+                  },
+                  {
+                    "key": "Gov-Client-Device-ID",
+                    "value": "{{gov_client_device_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-User-IDs",
+                    "value": "user={{gov_client_user_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-Timezone",
+                    "value": "UTC+00:00"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs",
+                    "value": "{{gov_client_local_ips}}"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs-Timestamp",
+                    "value": "{{gov_client_local_ips_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Screens",
+                    "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                  },
+                  {
+                    "key": "Gov-Client-Window-Size",
+                    "value": "width=1224&height=800"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Plugins",
+                    "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-JS-User-Agent",
+                    "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Do-Not-Track",
+                    "value": "true"
+                  },
+                  {
+                    "key": "Gov-Client-Multi-Factor",
+                    "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                  },
+                  {
+                    "key": "Gov-Vendor-Version",
+                    "value": "{{gov_vendor_version}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Public-IP",
+                    "value": "{{gov_vendor_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Forwarded",
+                    "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Product-Name",
+                    "value": "{{gov_vendor_product_name}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-License-IDs",
+                    "value": "{{gov_vendor_license_ids}}"
+                  },
+                  {
+                    "key": "Gov-Client-MAC-Addresses",
+                    "value": "00-14-22-01-23-45",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-User-Agent",
+                    "value": "PostmanRuntime/7.0",
+                    "disabled": true
+                  }
+                ],
+                "body": {
+                  "mode": "file",
+                  "file": {}
+                },
+                "url": {
+                  "raw": "https://test-api.service.hmrc.gov.uk/individuals/calculations/{{nino}}/self-assessment/{{tax_year}}/trigger/{{calculation_type}}",
+                  "protocol": "https",
+                  "host": [
+                    "test-api",
+                    "service",
+                    "hmrc",
+                    "gov",
+                    "uk"
+                  ],
+                  "path": [
+                    "individuals",
+                    "calculations",
+                    "{{nino}}",
+                    "self-assessment",
+                    "{{tax_year}}",
+                    "trigger",
+                    "{{calculation_type}}"
+                  ]
+                }
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": ":status",
+                  "value": 202
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "content-length",
+                  "value": "56"
+                },
+                {
+                  "key": "date",
+                  "value": "Mon, 23 Mar 2026 13:49:10 GMT"
+                },
+                {
+                  "key": "content-security-policy",
+                  "value": "default-src 'self'"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "no-cache,no-store,max-age=0"
+                },
+                {
+                  "key": "strict-transport-security",
+                  "value": "max-age=31536000;"
+                },
+                {
+                  "key": "vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "x-content-type-options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "x-correlationid",
+                  "value": "03269aac-198e-44b4-8b30-6cc57dd3bdb4"
+                },
+                {
+                  "key": "x-envoy-upstream-service-time",
+                  "value": "47"
+                },
+                {
+                  "key": "x-cache",
+                  "value": "Miss from cloudfront"
+                },
+                {
+                  "key": "via",
+                  "value": "1.1 01d9de39ec907ee6febcea913f8cbfa2.cloudfront.net (CloudFront)"
+                },
+                {
+                  "key": "x-amz-cf-pop",
+                  "value": "LHR50-P6"
+                },
+                {
+                  "key": "x-amz-cf-id",
+                  "value": "qEpGPMKZ-go0xPvoU8DdvqRbsOX3_54DTBMTy-F6uOH8TluC2oBLOw=="
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"calculationId\": \"c75dbb53-6237-49e2-b05a-60ef221f0260\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Property Business",
+      "item": [
+        {
+          "name": "Income and Expenses Period Summaries",
+          "item": [
+            {
+              "name": "Retrieve a UK Property Income & Expenses Period Summary",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "exec": [
+                      "// ── Path variable defaults ──────────────────────────────────────────────────",
+                      "if (!pm.collectionVariables.get(\"nino\"))         pm.collectionVariables.set(\"nino\",         \"TC663795B\");",
+                      "if (!pm.collectionVariables.get(\"businessId\"))   pm.collectionVariables.set(\"businessId\",   \"XAIS12345678910\");",
+                      "if (!pm.collectionVariables.get(\"taxYear\"))      pm.collectionVariables.set(\"taxYear\",      \"2022-23\");",
+                      "if (!pm.collectionVariables.get(\"submissionId\")) pm.collectionVariables.set(\"submissionId\", \"4557ecb5-fd32-48cc-81f5-e6acd1099f3c\");",
+                      "",
+                      "// ── Validate taxYear format (YYYY-YY, min 2022-23) ──────────────────────────",
+                      "const taxYear = pm.collectionVariables.get(\"taxYear\");",
+                      "const taxYearRegex = /^(\\d{4})-(\\d{2})$/;",
+                      "const match = taxYear && taxYear.match(taxYearRegex);",
+                      "if (match) {",
+                      "    const startYear = parseInt(match[1]);",
+                      "    const endYear = parseInt(match[1].substring(0, 2) + match[2]);",
+                      "    if (endYear !== startYear + 1) {",
+                      "        console.warn(\"taxYear must span exactly one tax year (e.g. 2022-23). Got:\", taxYear);",
+                      "    }",
+                      "    if (startYear < 2022) {",
+                      "        console.warn(\"taxYear minimum is 2022-23 (2021-22 in Sandbox). Got:\", taxYear);",
+                      "    }",
+                      "} else {",
+                      "    console.warn(\"taxYear format invalid. Expected YYYY-YY, got:\", taxYear);",
+                      "}",
+                      "",
+                      "// ── Validate submissionId format (UUID v4) ──────────────────────────────────",
+                      "const submissionId = pm.collectionVariables.get(\"submissionId\");",
+                      "const submissionIdRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;",
+                      "if (submissionId && !submissionIdRegex.test(submissionId)) {",
+                      "    console.warn(\"submissionId does not match required format. Got:\", submissionId);",
+                      "}",
+                      "",
+                      "// ── Validate businessId format ──────────────────────────────────────────────",
+                      "const businessId = pm.collectionVariables.get(\"businessId\");",
+                      "const businessIdRegex = /^X[A-Z0-9]{1}IS[0-9]{11}$/;",
+                      "if (businessId && !businessIdRegex.test(businessId)) {",
+                      "    console.warn(\"businessId does not match required format ^X[A-Z0-9]{1}IS[0-9]{11}$. Got:\", businessId);",
+                      "}",
+                      "",
+                      "// ── Fraud Prevention Headers ────────────────────────────────────────────────",
+                      "function isoNow() {",
+                      "    return new Date().toISOString();",
+                      "}",
+                      "",
+                      "function uuidv4() {",
+                      "    return \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".replace(/[xy]/g, c => {",
+                      "        const r = (Math.random() * 16) | 0;",
+                      "        return (c === \"x\" ? r : (r & 0x3) | 0x8).toString(16);",
+                      "    });",
+                      "}",
+                      "",
+                      "// Persist device ID across runs, reset if placeholder",
+                      "if (!pm.collectionVariables.get(\"gov_client_device_id\") || pm.collectionVariables.get(\"gov_client_device_id\") === \"device-12345\") {",
+                      "    pm.collectionVariables.set(\"gov_client_device_id\", uuidv4());",
+                      "}",
+                      "",
+                      "// Set static values only if not already set",
+                      "if (!pm.collectionVariables.get(\"gov_client_public_ip\"))    pm.collectionVariables.set(\"gov_client_public_ip\",    \"198.51.100.1\");",
+                      "if (!pm.collectionVariables.get(\"gov_client_public_port\"))  pm.collectionVariables.set(\"gov_client_public_port\",  \"49673\");",
+                      "if (!pm.collectionVariables.get(\"gov_client_user_id\"))      pm.collectionVariables.set(\"gov_client_user_id\",      \"none\");",
+                      "// Always overwrite gov_vendor_version to ensure correct value",
+                      "pm.collectionVariables.set(\"gov_vendor_version\",      \"Postman-MTD=1.0.0\");",
+                      "if (!pm.collectionVariables.get(\"gov_vendor_public_ip\"))    pm.collectionVariables.set(\"gov_vendor_public_ip\",    \"198.51.100.2\");",
+                      "if (!pm.collectionVariables.get(\"gov_vendor_product_name\")) pm.collectionVariables.set(\"gov_vendor_product_name\", \"Postman%20MTD%20Bridge\");",
+                      "if (!pm.collectionVariables.get(\"gov_vendor_license_ids\"))  pm.collectionVariables.set(\"gov_vendor_license_ids\",  \"postman=00000000-0000-0000-0000-000000000000\");",
+                      "",
+                      "// Always regenerate local IPs as real private IPv4 addresses",
+                      "function randomPrivateIP() {",
+                      "    return \"10.\" + Math.floor(Math.random()*255) + \".\" + Math.floor(Math.random()*255) + \".\" + (1 + Math.floor(Math.random()*254));",
+                      "}",
+                      "pm.collectionVariables.set(\"gov_client_local_ips\", randomPrivateIP() + \",\" + randomPrivateIP());",
+                      "",
+                      "// Always regenerate timestamps",
+                      "pm.collectionVariables.set(\"gov_client_public_ip_ts\", isoNow());",
+                      "pm.collectionVariables.set(\"gov_client_local_ips_ts\", isoNow());",
+                      "const mfaTs = isoNow();",
+                      "pm.collectionVariables.set(\"gov_client_mfa_ts\", mfaTs);",
+                      "",
+                      "// Build Gov-Client-Multi-Factor with percent-encoded timestamp and upsert",
+                      "// (The static header in the request is disabled; this upserted value is the authoritative one)",
+                      "const mfaHeaderValue = \"type=OTHER&timestamp=\" + encodeURIComponent(mfaTs) + \"&unique-reference=ref-123456\";",
+                      "pm.request.headers.upsert({ key: \"Gov-Client-Multi-Factor\", value: mfaHeaderValue });",
+                      ""
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "// ── 200 Success tests ────────────────────────────────────────────────────────",
+                      "if (pm.response.code === 200) {",
+                      "",
+                      "    pm.test(\"Status is 200 OK\", () => {",
+                      "        pm.response.to.have.status(200);",
+                      "    });",
+                      "",
+                      "    pm.test(\"Response is JSON\", () => {",
+                      "        pm.response.to.be.json;",
+                      "    });",
+                      "",
+                      "    pm.test(\"X-CorrelationId header is present and is a 36-char string\", () => {",
+                      "        pm.response.to.have.header(\"X-CorrelationId\");",
+                      "        pm.expect(pm.response.headers.get(\"X-CorrelationId\")).to.match(",
+                      "            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                      "        );",
+                      "    });",
+                      "",
+                      "    pm.test(\"Response contains required top-level fields: submittedOn, fromDate, toDate\", () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json).to.have.property(\"submittedOn\").that.is.a(\"string\");",
+                      "        pm.expect(json).to.have.property(\"fromDate\").that.is.a(\"string\");",
+                      "        pm.expect(json).to.have.property(\"toDate\").that.is.a(\"string\");",
+                      "    });",
+                      "",
+                      "    pm.test(\"submittedOn matches format YYYY-MM-DDThh:mm:ss.SSSZ\", () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json.submittedOn).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/);",
+                      "    });",
+                      "",
+                      "    pm.test(\"fromDate matches format YYYY-MM-DD\", () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json.fromDate).to.match(/^\\d{4}-\\d{2}-\\d{2}$/);",
+                      "    });",
+                      "",
+                      "    pm.test(\"toDate matches format YYYY-MM-DD\", () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json.toDate).to.match(/^\\d{4}-\\d{2}-\\d{2}$/);",
+                      "    });",
+                      "",
+                      "    pm.test(\"At least one of ukFhlProperty or ukNonFhlProperty is present (if applicable)\", () => {",
+                      "        const json = pm.response.json();",
+                      "        const hasUkFhl    = json.hasOwnProperty(\"ukFhlProperty\");",
+                      "        const hasUkNonFhl = json.hasOwnProperty(\"ukNonFhlProperty\");",
+                      "        // Both may be absent (DEFAULT scenario returns no data), so just validate structure if present",
+                      "        if (hasUkFhl) {",
+                      "            pm.expect(json.ukFhlProperty).to.be.an(\"object\");",
+                      "            const fhl = json.ukFhlProperty;",
+                      "            if (fhl.income)    pm.expect(fhl.income).to.be.an(\"object\");",
+                      "            if (fhl.expenses)  pm.expect(fhl.expenses).to.be.an(\"object\");",
+                      "        }",
+                      "        if (hasUkNonFhl) {",
+                      "            pm.expect(json.ukNonFhlProperty).to.be.an(\"object\");",
+                      "            const nonFhl = json.ukNonFhlProperty;",
+                      "            if (nonFhl.income)   pm.expect(nonFhl.income).to.be.an(\"object\");",
+                      "            if (nonFhl.expenses) pm.expect(nonFhl.expenses).to.be.an(\"object\");",
+                      "        }",
+                      "    });",
+                      "",
+                      "    // Log submission summary",
+                      "    try {",
+                      "        const json = pm.response.json();",
+                      "        console.log(\"Retrieve successful for nino:\", pm.variables.get(\"nino\") || pm.collectionVariables.get(\"nino\"));",
+                      "        console.log(\"businessId:\", pm.variables.get(\"businessId\") || pm.collectionVariables.get(\"businessId\"),",
+                      "                    \"| taxYear:\", pm.variables.get(\"taxYear\") || pm.collectionVariables.get(\"taxYear\"),",
+                      "                    \"| submissionId:\", pm.variables.get(\"submissionId\") || pm.collectionVariables.get(\"submissionId\"));",
+                      "        console.log(\"submittedOn:\", json.submittedOn, \"| fromDate:\", json.fromDate, \"| toDate:\", json.toDate);",
+                      "        if (json.ukFhlProperty)    console.log(\"ukFhlProperty present:\",    JSON.stringify(json.ukFhlProperty));",
+                      "        if (json.ukNonFhlProperty) console.log(\"ukNonFhlProperty present:\", JSON.stringify(json.ukNonFhlProperty));",
+                      "    } catch(e) {}",
+                      "",
+                      "// ── 400 Bad Request tests ────────────────────────────────────────────────────",
+                      "} else if (pm.response.code === 400) {",
+                      "",
+                      "    pm.test(\"Status is 400 Bad Request\", () => {",
+                      "        pm.response.to.have.status(400);",
+                      "    });",
+                      "",
+                      "    pm.test(\"X-CorrelationId header is present\", () => {",
+                      "        pm.response.to.have.header(\"X-CorrelationId\");",
+                      "    });",
+                      "",
+                      "    pm.test(\"Error response has required fields: code\", () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json).to.have.property(\"code\").that.is.a(\"string\");",
+                      "    });",
+                      "",
+                      "    console.warn(\"400 Bad Request - code:\", pm.response.json().code, \"| message:\", pm.response.json().message);",
+                      "",
+                      "// ── 403 Forbidden tests ──────────────────────────────────────────────────────",
+                      "} else if (pm.response.code === 403) {",
+                      "",
+                      "    pm.test(\"Status is 403 Forbidden\", () => {",
+                      "        pm.response.to.have.status(403);",
+                      "    });",
+                      "",
+                      "    pm.test(\"X-CorrelationId header is present\", () => {",
+                      "        pm.response.to.have.header(\"X-CorrelationId\");",
+                      "    });",
+                      "",
+                      "    pm.test(\"Error response has required fields: code\", () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json).to.have.property(\"code\").that.is.a(\"string\");",
+                      "    });",
+                      "",
+                      "    console.warn(\"403 Forbidden - code:\", pm.response.json().code, \"| message:\", pm.response.json().message);",
+                      "",
+                      "// ── 404 Not Found tests ──────────────────────────────────────────────────────",
+                      "} else if (pm.response.code === 404) {",
+                      "",
+                      "    pm.test(\"Status is 404 Not Found\", () => {",
+                      "        pm.response.to.have.status(404);",
+                      "    });",
+                      "",
+                      "    pm.test(\"X-CorrelationId header is present\", () => {",
+                      "        pm.response.to.have.header(\"X-CorrelationId\");",
+                      "    });",
+                      "",
+                      "    pm.test(\"Error response has required fields: code\", () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json).to.have.property(\"code\").that.is.a(\"string\");",
+                      "    });",
+                      "",
+                      "    console.warn(\"404 Not Found - code:\", pm.response.json().code, \"| message:\", pm.response.json().message);",
+                      "",
+                      "// ── Unexpected status ────────────────────────────────────────────────────────",
+                      "} else {",
+                      "",
+                      "    pm.test(\"Unexpected status code: \" + pm.response.code, () => {",
+                      "        pm.expect.fail(\"Received unexpected HTTP status: \" + pm.response.code);",
+                      "    });",
+                      "",
+                      "}"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/vnd.hmrc.6.0+json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}"
+                  },
+                  {
+                    "key": "Gov-Test-Scenario",
+                    "value": "UK_PROPERTY"
+                  },
+                  {
+                    "key": "Gov-Client-Connection-Method",
+                    "value": "WEB_APP_VIA_SERVER"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP",
+                    "value": "{{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP-Timestamp",
+                    "value": "{{gov_client_public_ip_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-Port",
+                    "value": "{{gov_client_public_port}}"
+                  },
+                  {
+                    "key": "Gov-Client-Device-ID",
+                    "value": "{{gov_client_device_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-User-IDs",
+                    "value": "user={{gov_client_user_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-Timezone",
+                    "value": "UTC+00:00"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs",
+                    "value": "{{gov_client_local_ips}}"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs-Timestamp",
+                    "value": "{{gov_client_local_ips_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Screens",
+                    "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                  },
+                  {
+                    "key": "Gov-Client-Window-Size",
+                    "value": "width=1224&height=800"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Plugins",
+                    "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-JS-User-Agent",
+                    "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Do-Not-Track",
+                    "value": "true"
+                  },
+                  {
+                    "key": "Gov-Client-Multi-Factor",
+                    "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                  },
+                  {
+                    "key": "Gov-Vendor-Version",
+                    "value": "{{gov_vendor_version}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Public-IP",
+                    "value": "{{gov_vendor_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Forwarded",
+                    "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Product-Name",
+                    "value": "{{gov_vendor_product_name}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-License-IDs",
+                    "value": "{{gov_vendor_license_ids}}"
+                  },
+                  {
+                    "key": "Gov-Client-MAC-Addresses",
+                    "value": "00-14-22-01-23-45"
+                  },
+                  {
+                    "key": "Gov-Client-User-Agent",
+                    "value": "PostmanRuntime/7.0"
+                  }
+                ],
+                "url": {
+                  "raw": "https://test-api.service.hmrc.gov.uk/individuals/business/property/uk/{{nino}}/{{businessId}}/period/{{taxYear}}/{{submissionId}}",
+                  "protocol": "https",
+                  "host": [
+                    "test-api",
+                    "service",
+                    "hmrc",
+                    "gov",
+                    "uk"
+                  ],
+                  "path": [
+                    "individuals",
+                    "business",
+                    "property",
+                    "uk",
+                    "{{nino}}",
+                    "{{businessId}}",
+                    "period",
+                    "{{taxYear}}",
+                    "{{submissionId}}"
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Retrieve a UK Property Income & Expenses Period Summary",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/vnd.hmrc.6.0+json"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "disabled": true
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{access_token}}"
+                      },
+                      {
+                        "key": "Gov-Test-Scenario",
+                        "value": "UK_PROPERTY"
+                      },
+                      {
+                        "key": "Gov-Client-Connection-Method",
+                        "value": "WEB_APP_VIA_SERVER"
+                      },
+                      {
+                        "key": "Gov-Client-Public-IP",
+                        "value": "{{gov_client_public_ip}}"
+                      },
+                      {
+                        "key": "Gov-Client-Public-IP-Timestamp",
+                        "value": "{{gov_client_public_ip_ts}}"
+                      },
+                      {
+                        "key": "Gov-Client-Public-Port",
+                        "value": "{{gov_client_public_port}}"
+                      },
+                      {
+                        "key": "Gov-Client-Device-ID",
+                        "value": "{{gov_client_device_id}}"
+                      },
+                      {
+                        "key": "Gov-Client-User-IDs",
+                        "value": "user={{gov_client_user_id}}"
+                      },
+                      {
+                        "key": "Gov-Client-Timezone",
+                        "value": "UTC+00:00"
+                      },
+                      {
+                        "key": "Gov-Client-Local-IPs",
+                        "value": "{{gov_client_local_ips}}"
+                      },
+                      {
+                        "key": "Gov-Client-Local-IPs-Timestamp",
+                        "value": "{{gov_client_local_ips_ts}}"
+                      },
+                      {
+                        "key": "Gov-Client-Screens",
+                        "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                      },
+                      {
+                        "key": "Gov-Client-Window-Size",
+                        "value": "width=1224&height=800"
+                      },
+                      {
+                        "key": "Gov-Client-Browser-Plugins",
+                        "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                      },
+                      {
+                        "key": "Gov-Client-Browser-JS-User-Agent",
+                        "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                      },
+                      {
+                        "key": "Gov-Client-Browser-Do-Not-Track",
+                        "value": "true"
+                      },
+                      {
+                        "key": "Gov-Client-Multi-Factor",
+                        "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                      },
+                      {
+                        "key": "Gov-Vendor-Version",
+                        "value": "{{gov_vendor_version}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-Public-IP",
+                        "value": "{{gov_vendor_public_ip}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-Forwarded",
+                        "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-Product-Name",
+                        "value": "{{gov_vendor_product_name}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-License-IDs",
+                        "value": "{{gov_vendor_license_ids}}"
+                      },
+                      {
+                        "key": "Gov-Client-MAC-Addresses",
+                        "value": "00-14-22-01-23-45"
+                      },
+                      {
+                        "key": "Gov-Client-User-Agent",
+                        "value": "PostmanRuntime/7.0"
+                      }
+                    ],
+                    "url": {
+                      "raw": "https://test-api.service.hmrc.gov.uk/individuals/business/property/uk/{{nino}}/{{businessId}}/period/{{taxYear}}/{{submissionId}}",
+                      "protocol": "https",
+                      "host": [
+                        "test-api",
+                        "service",
+                        "hmrc",
+                        "gov",
+                        "uk"
+                      ],
+                      "path": [
+                        "individuals",
+                        "business",
+                        "property",
+                        "uk",
+                        "{{nino}}",
+                        "{{businessId}}",
+                        "period",
+                        "{{taxYear}}",
+                        "{{submissionId}}"
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": ":status",
+                      "value": 200
+                    },
+                    {
+                      "key": "content-type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "content-length",
+                      "value": "917"
+                    },
+                    {
+                      "key": "date",
+                      "value": "Tue, 24 Mar 2026 16:54:53 GMT"
+                    },
+                    {
+                      "key": "x-frame-options",
+                      "value": "SAMEORIGIN"
+                    },
+                    {
+                      "key": "cache-control",
+                      "value": "no-cache,no-store,max-age=0"
+                    },
+                    {
+                      "key": "strict-transport-security",
+                      "value": "max-age=31536000;"
+                    },
+                    {
+                      "key": "vary",
+                      "value": "Origin"
+                    },
+                    {
+                      "key": "x-content-type-options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "x-correlationid",
+                      "value": "30e6c7a4-5ee4-45b8-8569-f1930a69bf8b"
+                    },
+                    {
+                      "key": "x-envoy-upstream-service-time",
+                      "value": "57"
+                    },
+                    {
+                      "key": "content-security-policy",
+                      "value": "default-src 'self'"
+                    },
+                    {
+                      "key": "x-cache",
+                      "value": "Miss from cloudfront"
+                    },
+                    {
+                      "key": "via",
+                      "value": "1.1 80ae708211d4654b19a754784a515e76.cloudfront.net (CloudFront)"
+                    },
+                    {
+                      "key": "x-amz-cf-pop",
+                      "value": "LHR50-P6"
+                    },
+                    {
+                      "key": "x-amz-cf-id",
+                      "value": "7kd-v_NhyEv8hRjeQpRRHHpJCVE26OkkSJ2jxYzY2xjZvNtjUbLoQA=="
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"submittedOn\": \"2024-10-21T08:57:47.000Z\",\n    \"fromDate\": \"2024-07-06\",\n    \"toDate\": \"2024-10-05\",\n    \"ukFhlProperty\": {\n        \"income\": {\n            \"periodAmount\": 5000.99,\n            \"taxDeducted\": 3123.21,\n            \"rentARoom\": {\n                \"rentsReceived\": 532.12\n            }\n        },\n        \"expenses\": {\n            \"premisesRunningCosts\": 993.1,\n            \"repairsAndMaintenance\": 939.75,\n            \"financialCosts\": 399.29,\n            \"professionalFees\": 3991.49,\n            \"costOfServices\": 849.2,\n            \"other\": 8849.95,\n            \"travelCosts\": 3910.5,\n            \"rentARoom\": {\n                \"amountClaimed\": 9482.75\n            }\n        }\n    },\n    \"ukNonFhlProperty\": {\n        \"income\": {\n            \"premiumsOfLeaseGrant\": 4889.23,\n            \"reversePremiums\": 847.35,\n            \"periodAmount\": 747.45,\n            \"taxDeducted\": 984.29,\n            \"otherIncome\": 954.32,\n            \"rentARoom\": {\n                \"rentsReceived\": 488.39\n            }\n        },\n        \"expenses\": {\n            \"premisesRunningCosts\": -4141.21,\n            \"repairsAndMaintenance\": -582.25,\n            \"financialCosts\": 829.39,\n            \"professionalFees\": -4992.31,\n            \"costOfServices\": -98.5,\n            \"other\": 488.95,\n            \"residentialFinancialCost\": 2884.99,\n            \"travelCosts\": 48.93,\n            \"residentialFinancialCostsCarriedForward\": 483.91,\n            \"rentARoom\": {\n                \"amountClaimed\": 88.55\n            }\n        }\n    }\n}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Annual Submissions",
+          "item": [
+            {
+              "name": "Create and Amend a UK Property Business Annual Submission",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// ── Path variable defaults ──────────────────────────────────────────────────",
+                      "if (!pm.variables.get(\"nino\"))       pm.variables.set(\"nino\",       \"TC663795B\");",
+                      "if (!pm.variables.get(\"businessId\")) pm.variables.set(\"businessId\", \"XAIS12345678910\");",
+                      "if (!pm.variables.get(\"taxYear\"))    pm.variables.set(\"taxYear\",    \"2022-23\");",
+                      "",
+                      "// ── Fraud Prevention Headers ────────────────────────────────────────────────",
+                      "const uuid = () =>",
+                      "    \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".replace(/[xy]/g, c => {",
+                      "        const r = (Math.random() * 16) | 0;",
+                      "        return (c === \"x\" ? r : (r & 0x3) | 0x8).toString(16);",
+                      "    });",
+                      "",
+                      "const now = new Date().toISOString();",
+                      "",
+                      "// Persist device ID across runs",
+                      "if (!pm.collectionVariables.get(\"gov_client_device_id\")) {",
+                      "    pm.collectionVariables.set(\"gov_client_device_id\", uuid());",
+                      "}",
+                      "",
+                      "pm.variables.set(\"gov_client_public_ip\",   \"198.51.100.1\");",
+                      "pm.variables.set(\"gov_client_public_ip_ts\", now);",
+                      "pm.variables.set(\"gov_client_public_port\", \"49673\");",
+                      "pm.variables.set(\"gov_client_user_id\",     \"none\");",
+                      "pm.variables.set(\"gov_client_local_ips\",   \"10.1.2.3,10.4.5.6\");",
+                      "pm.variables.set(\"gov_client_local_ips_ts\", now);",
+                      "pm.variables.set(\"gov_client_mfa_ts\",      now);",
+                      "pm.variables.set(\"gov_vendor_version\",     \"Postman-MTD=1.0.0\");",
+                      "pm.variables.set(\"gov_vendor_public_ip\",   \"198.51.100.2\");",
+                      "pm.variables.set(\"gov_vendor_product_name\",\"Postman%20MTD%20Bridge\");",
+                      "pm.variables.set(\"gov_vendor_license_ids\", \"postman=00000000-0000-0000-0000-000000000000\");",
+                      "",
+                      "// Build Gov-Client-Multi-Factor with percent-encoded timestamp",
+                      "const mfaHeaderValue = \"type=OTHER&timestamp=\" + encodeURIComponent(now) + \"&unique-reference=ref-123456\";",
+                      "pm.request.headers.upsert({ key: \"Gov-Client-Multi-Factor\", value: mfaHeaderValue });",
+                      ""
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is 200 OK', () => {",
+                      "  pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test('Response is JSON', () => {",
+                      "  pm.response.to.be.json;",
+                      "});",
+                      "",
+                      "pm.test('X-CorrelationId header is present', () => {",
+                      "  pm.response.to.have.header('X-CorrelationId');",
+                      "});",
+                      "",
+                      "pm.test('ukFhlProperty structure is valid (if present)', () => {",
+                      "  const json = pm.response.json();",
+                      "  if (json.ukFhlProperty) {",
+                      "    pm.expect(json.ukFhlProperty).to.be.an('object');",
+                      "    if (json.ukFhlProperty.allowances) {",
+                      "      pm.expect(json.ukFhlProperty.allowances).to.be.an('object');",
+                      "    }",
+                      "    if (json.ukFhlProperty.adjustments) {",
+                      "      pm.expect(json.ukFhlProperty.adjustments).to.be.an('object');",
+                      "    }",
+                      "  }",
+                      "});",
+                      "",
+                      "pm.test('ukProperty structure is valid (if present)', () => {",
+                      "  const json = pm.response.json();",
+                      "  if (json.ukProperty) {",
+                      "    pm.expect(json.ukProperty).to.be.an('object');",
+                      "    if (json.ukProperty.allowances) {",
+                      "      pm.expect(json.ukProperty.allowances).to.be.an('object');",
+                      "    }",
+                      "    if (json.ukProperty.adjustments) {",
+                      "      pm.expect(json.ukProperty.adjustments).to.be.an('object');",
+                      "    }",
+                      "  }",
+                      "});",
+                      "",
+                      "// Log submission summary",
+                      "try {",
+                      "  const json = pm.response.json();",
+                      "  console.log('Submission successful for nino:', pm.collectionVariables.get('nino'));",
+                      "  console.log('businessId:', pm.collectionVariables.get('businessId'), '| taxYear:', pm.collectionVariables.get('taxYear'));",
+                      "  if (json.ukFhlProperty) console.log('ukFhlProperty submitted:', JSON.stringify(json.ukFhlProperty));",
+                      "  if (json.ukProperty) console.log('ukProperty submitted:', JSON.stringify(json.ukProperty));",
+                      "} catch(e) {}"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/vnd.hmrc.6.0+json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}"
+                  },
+                  {
+                    "key": "Gov-Test-Scenario",
+                    "value": "DEFAULT",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-Connection-Method",
+                    "value": "WEB_APP_VIA_SERVER"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP",
+                    "value": "{{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP-Timestamp",
+                    "value": "{{gov_client_public_ip_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-Port",
+                    "value": "{{gov_client_public_port}}"
+                  },
+                  {
+                    "key": "Gov-Client-Device-ID",
+                    "value": "{{gov_client_device_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-User-IDs",
+                    "value": "user={{gov_client_user_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-Timezone",
+                    "value": "UTC+00:00"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs",
+                    "value": "{{gov_client_local_ips}}"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs-Timestamp",
+                    "value": "{{gov_client_local_ips_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Screens",
+                    "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                  },
+                  {
+                    "key": "Gov-Client-Window-Size",
+                    "value": "width=1224&height=800"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Plugins",
+                    "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-JS-User-Agent",
+                    "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Do-Not-Track",
+                    "value": "true"
+                  },
+                  {
+                    "key": "Gov-Client-Multi-Factor",
+                    "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                  },
+                  {
+                    "key": "Gov-Vendor-Version",
+                    "value": "{{gov_vendor_version}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Public-IP",
+                    "value": "{{gov_vendor_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Forwarded",
+                    "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Product-Name",
+                    "value": "{{gov_vendor_product_name}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-License-IDs",
+                    "value": "{{gov_vendor_license_ids}}"
+                  },
+                  {
+                    "key": "Gov-Client-MAC-Addresses",
+                    "value": "00-14-22-01-23-45",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-User-Agent",
+                    "value": "PostmanRuntime/7.0",
+                    "disabled": true
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ukFhlProperty\": {\n    \"allowances\": {\n      \"propertyIncomeAllowance\": 123.45\n    },\n    \"adjustments\": {\n      \"balancingCharge\": 231.45,\n      \"periodOfGraceAdjustment\": true,\n      \"businessPremisesRenovationAllowanceBalancingCharges\": 567.67,\n      \"nonResidentLandlord\": true,\n      \"rentARoom\": {\n        \"jointlyLet\": true\n      }\n    }\n  },\n  \"ukProperty\": {\n    \"allowances\": {\n      \"propertyIncomeAllowance\": 678.45\n    },\n    \"adjustments\": {\n      \"balancingCharge\": 565.34,\n      \"businessPremisesRenovationAllowanceBalancingCharges\": 563.34,\n      \"nonResidentLandlord\": true,\n      \"rentARoom\": {\n        \"jointlyLet\": true\n      }\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "https://test-api.service.hmrc.gov.uk/individuals/business/property/uk/{{nino}}/{{businessId}}/annual/{{taxYear}}",
+                  "protocol": "https",
+                  "host": [
+                    "test-api",
+                    "service",
+                    "hmrc",
+                    "gov",
+                    "uk"
+                  ],
+                  "path": [
+                    "individuals",
+                    "business",
+                    "property",
+                    "uk",
+                    "{{nino}}",
+                    "{{businessId}}",
+                    "annual",
+                    "{{taxYear}}"
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Create and Amend a UK Property Business Annual Submission",
+                  "originalRequest": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/vnd.hmrc.6.0+json"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{access_token}}"
+                      },
+                      {
+                        "key": "Gov-Test-Scenario",
+                        "value": "DEFAULT",
+                        "disabled": true
+                      },
+                      {
+                        "key": "Gov-Client-Connection-Method",
+                        "value": "WEB_APP_VIA_SERVER"
+                      },
+                      {
+                        "key": "Gov-Client-Public-IP",
+                        "value": "{{gov_client_public_ip}}"
+                      },
+                      {
+                        "key": "Gov-Client-Public-IP-Timestamp",
+                        "value": "{{gov_client_public_ip_ts}}"
+                      },
+                      {
+                        "key": "Gov-Client-Public-Port",
+                        "value": "{{gov_client_public_port}}"
+                      },
+                      {
+                        "key": "Gov-Client-Device-ID",
+                        "value": "{{gov_client_device_id}}"
+                      },
+                      {
+                        "key": "Gov-Client-User-IDs",
+                        "value": "user={{gov_client_user_id}}"
+                      },
+                      {
+                        "key": "Gov-Client-Timezone",
+                        "value": "UTC+00:00"
+                      },
+                      {
+                        "key": "Gov-Client-Local-IPs",
+                        "value": "{{gov_client_local_ips}}"
+                      },
+                      {
+                        "key": "Gov-Client-Local-IPs-Timestamp",
+                        "value": "{{gov_client_local_ips_ts}}"
+                      },
+                      {
+                        "key": "Gov-Client-Screens",
+                        "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                      },
+                      {
+                        "key": "Gov-Client-Window-Size",
+                        "value": "width=1224&height=800"
+                      },
+                      {
+                        "key": "Gov-Client-Browser-Plugins",
+                        "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                      },
+                      {
+                        "key": "Gov-Client-Browser-JS-User-Agent",
+                        "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                      },
+                      {
+                        "key": "Gov-Client-Browser-Do-Not-Track",
+                        "value": "true"
+                      },
+                      {
+                        "key": "Gov-Client-Multi-Factor",
+                        "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                      },
+                      {
+                        "key": "Gov-Vendor-Version",
+                        "value": "{{gov_vendor_version}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-Public-IP",
+                        "value": "{{gov_vendor_public_ip}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-Forwarded",
+                        "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-Product-Name",
+                        "value": "{{gov_vendor_product_name}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-License-IDs",
+                        "value": "{{gov_vendor_license_ids}}"
+                      },
+                      {
+                        "key": "Gov-Client-MAC-Addresses",
+                        "value": "00-14-22-01-23-45",
+                        "disabled": true
+                      },
+                      {
+                        "key": "Gov-Client-User-Agent",
+                        "value": "PostmanRuntime/7.0",
+                        "disabled": true
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"ukFhlProperty\": {\n    \"allowances\": {\n      \"propertyIncomeAllowance\": 123.45\n    },\n    \"adjustments\": {\n      \"balancingCharge\": 231.45,\n      \"periodOfGraceAdjustment\": true,\n      \"businessPremisesRenovationAllowanceBalancingCharges\": 567.67,\n      \"nonResidentLandlord\": true,\n      \"rentARoom\": {\n        \"jointlyLet\": true\n      }\n    }\n  },\n  \"ukProperty\": {\n    \"allowances\": {\n      \"propertyIncomeAllowance\": 678.45\n    },\n    \"adjustments\": {\n      \"balancingCharge\": 565.34,\n      \"businessPremisesRenovationAllowanceBalancingCharges\": 563.34,\n      \"nonResidentLandlord\": true,\n      \"rentARoom\": {\n        \"jointlyLet\": true\n      }\n    }\n  }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "https://test-api.service.hmrc.gov.uk/individuals/business/property/uk/{{nino}}/{{businessId}}/annual/{{taxYear}}",
+                      "protocol": "https",
+                      "host": [
+                        "test-api",
+                        "service",
+                        "hmrc",
+                        "gov",
+                        "uk"
+                      ],
+                      "path": [
+                        "individuals",
+                        "business",
+                        "property",
+                        "uk",
+                        "{{nino}}",
+                        "{{businessId}}",
+                        "annual",
+                        "{{taxYear}}"
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": ":status",
+                      "value": 200
+                    },
+                    {
+                      "key": "content-type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "content-length",
+                      "value": "0"
+                    },
+                    {
+                      "key": "date",
+                      "value": "Tue, 24 Mar 2026 14:59:37 GMT"
+                    },
+                    {
+                      "key": "x-frame-options",
+                      "value": "SAMEORIGIN"
+                    },
+                    {
+                      "key": "cache-control",
+                      "value": "no-cache,no-store,max-age=0"
+                    },
+                    {
+                      "key": "strict-transport-security",
+                      "value": "max-age=31536000;"
+                    },
+                    {
+                      "key": "vary",
+                      "value": "Origin"
+                    },
+                    {
+                      "key": "x-content-type-options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "x-correlationid",
+                      "value": "4fbe2604-186b-4818-b859-d9d222eb30f5"
+                    },
+                    {
+                      "key": "x-envoy-upstream-service-time",
+                      "value": "49"
+                    },
+                    {
+                      "key": "content-security-policy",
+                      "value": "default-src 'self'"
+                    },
+                    {
+                      "key": "x-cache",
+                      "value": "Miss from cloudfront"
+                    },
+                    {
+                      "key": "via",
+                      "value": "1.1 342bd3a234d20ba4b06602553c91244c.cloudfront.net (CloudFront)"
+                    },
+                    {
+                      "key": "x-amz-cf-pop",
+                      "value": "LHR50-P6"
+                    },
+                    {
+                      "key": "x-amz-cf-id",
+                      "value": "URhDSUrJPbRhNDQStnIzF-3J7Ezad9J4YCoIXDBOpLeyjyZfvlcZbw=="
+                    }
+                  ],
+                  "cookie": [],
+                  "body": null
+                }
+              ]
+            },
+            {
+              "name": "Retrieve a UK Property Business Annual Submission",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "exec": [
+                      "// ── Path variable defaults ──────────────────────────────────────────────────",
+                      "if (!pm.collectionVariables.get('nino'))       pm.collectionVariables.set('nino',       'TC663795B');",
+                      "if (!pm.collectionVariables.get('businessId')) pm.collectionVariables.set('businessId', 'XAIS12345678910');",
+                      "if (!pm.collectionVariables.get('taxYear'))    pm.collectionVariables.set('taxYear',    '2022-23');",
+                      "",
+                      "// ── Validate taxYear format (YYYY-YY, min 2022-23) ──────────────────────────",
+                      "const taxYear = pm.collectionVariables.get('taxYear');",
+                      "const taxYearRegex = /^(\\d{4})-(\\d{2})$/;",
+                      "const match = taxYear && taxYear.match(taxYearRegex);",
+                      "if (match) {",
+                      "    const startYear = parseInt(match[1]);",
+                      "    const endYear   = parseInt(match[1].substring(0, 2) + match[2]);",
+                      "    if (endYear !== startYear + 1) {",
+                      "        console.warn('taxYear must span exactly one tax year (e.g. 2022-23). Got:', taxYear);",
+                      "    }",
+                      "    if (startYear < 2022) {",
+                      "        console.warn('taxYear minimum is 2022-23 (2021-22 in Sandbox). Got:', taxYear);",
+                      "    }",
+                      "} else {",
+                      "    console.warn('taxYear format invalid. Expected YYYY-YY, got:', taxYear);",
+                      "}",
+                      "",
+                      "// ── Validate businessId format ──────────────────────────────────────────────",
+                      "const businessId = pm.collectionVariables.get('businessId');",
+                      "const businessIdRegex = /^X[A-Z0-9]{1}IS[0-9]{11}$/;",
+                      "if (businessId && !businessIdRegex.test(businessId)) {",
+                      "    console.warn('businessId does not match required format ^X[A-Z0-9]{1}IS[0-9]{11}$. Got:', businessId);",
+                      "}",
+                      "",
+                      "// ── Fraud Prevention Headers ────────────────────────────────────────────────",
+                      "function isoNow() { return new Date().toISOString(); }",
+                      "",
+                      "function uuidv4() {",
+                      "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {",
+                      "        const r = (Math.random() * 16) | 0;",
+                      "        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);",
+                      "    });",
+                      "}",
+                      "",
+                      "// Persist device ID across runs, reset if placeholder",
+                      "if (!pm.collectionVariables.get('gov_client_device_id') || pm.collectionVariables.get('gov_client_device_id') === 'device-12345') {",
+                      "    pm.collectionVariables.set('gov_client_device_id', uuidv4());",
+                      "}",
+                      "",
+                      "// Set static values only if not already set",
+                      "if (!pm.collectionVariables.get('gov_client_public_ip'))    pm.collectionVariables.set('gov_client_public_ip',    '198.51.100.1');",
+                      "if (!pm.collectionVariables.get('gov_client_public_port'))  pm.collectionVariables.set('gov_client_public_port',  '49673');",
+                      "if (!pm.collectionVariables.get('gov_client_user_id'))      pm.collectionVariables.set('gov_client_user_id',      'none');",
+                      "pm.collectionVariables.set('gov_vendor_version', 'Postman-MTD=1.0.0');",
+                      "if (!pm.collectionVariables.get('gov_vendor_public_ip'))    pm.collectionVariables.set('gov_vendor_public_ip',    '198.51.100.2');",
+                      "if (!pm.collectionVariables.get('gov_vendor_product_name')) pm.collectionVariables.set('gov_vendor_product_name', 'Postman%20MTD%20Bridge');",
+                      "if (!pm.collectionVariables.get('gov_vendor_license_ids'))  pm.collectionVariables.set('gov_vendor_license_ids',  'postman=00000000-0000-0000-0000-000000000000');",
+                      "",
+                      "// Always regenerate local IPs as real private IPv4 addresses",
+                      "function randomPrivateIP() {",
+                      "    return '10.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255) + '.' + (1 + Math.floor(Math.random()*254));",
+                      "}",
+                      "pm.collectionVariables.set('gov_client_local_ips', randomPrivateIP() + ',' + randomPrivateIP());",
+                      "",
+                      "// Always regenerate timestamps",
+                      "pm.collectionVariables.set('gov_client_public_ip_ts', isoNow());",
+                      "pm.collectionVariables.set('gov_client_local_ips_ts', isoNow());",
+                      "const mfaTs = isoNow();",
+                      "pm.collectionVariables.set('gov_client_mfa_ts', mfaTs);",
+                      "",
+                      "// Build Gov-Client-Multi-Factor with percent-encoded timestamp and upsert",
+                      "const mfaHeaderValue = 'type=OTHER&timestamp=' + encodeURIComponent(mfaTs) + '&unique-reference=ref-123456';",
+                      "pm.request.headers.upsert({ key: 'Gov-Client-Multi-Factor', value: mfaHeaderValue });"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "// ── 200 Success tests ────────────────────────────────────────────────────────",
+                      "if (pm.response.code === 200) {",
+                      "",
+                      "    pm.test('Status is 200 OK', () => {",
+                      "        pm.response.to.have.status(200);",
+                      "    });",
+                      "",
+                      "    pm.test('Response is JSON', () => {",
+                      "        pm.response.to.be.json;",
+                      "    });",
+                      "",
+                      "    pm.test('X-CorrelationId header is present and is a 36-char string', () => {",
+                      "        pm.response.to.have.header('X-CorrelationId');",
+                      "        pm.expect(pm.response.headers.get('X-CorrelationId')).to.match(",
+                      "            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                      "        );",
+                      "    });",
+                      "",
+                      "    pm.test('Response contains required field: submittedOn', () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json).to.have.property('submittedOn').that.is.a('string');",
+                      "    });",
+                      "",
+                      "    pm.test('submittedOn matches format YYYY-MM-DDThh:mm:ss.SSSZ', () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json.submittedOn).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/);",
+                      "    });",
+                      "",
+                      "    pm.test('At least one of ukFhlProperty or ukProperty is present (if applicable)', () => {",
+                      "        const json = pm.response.json();",
+                      "        const hasUkFhl      = json.hasOwnProperty('ukFhlProperty');",
+                      "        const hasUkProperty = json.hasOwnProperty('ukProperty');",
+                      "        if (hasUkFhl) {",
+                      "            pm.expect(json.ukFhlProperty).to.be.an('object');",
+                      "            const fhl = json.ukFhlProperty;",
+                      "            if (fhl.allowances)  pm.expect(fhl.allowances).to.be.an('object');",
+                      "            if (fhl.adjustments) pm.expect(fhl.adjustments).to.be.an('object');",
+                      "        }",
+                      "        if (hasUkProperty) {",
+                      "            pm.expect(json.ukProperty).to.be.an('object');",
+                      "            const prop = json.ukProperty;",
+                      "            if (prop.allowances)  pm.expect(prop.allowances).to.be.an('object');",
+                      "            if (prop.adjustments) pm.expect(prop.adjustments).to.be.an('object');",
+                      "        }",
+                      "    });",
+                      "",
+                      "    // Log submission summary",
+                      "    try {",
+                      "        const json = pm.response.json();",
+                      "        console.log('Annual submission retrieved for nino:', pm.collectionVariables.get('nino'));",
+                      "        console.log('businessId:', pm.collectionVariables.get('businessId'), '| taxYear:', pm.collectionVariables.get('taxYear'));",
+                      "        console.log('submittedOn:', json.submittedOn);",
+                      "        if (json.ukFhlProperty)  console.log('ukFhlProperty present:',  JSON.stringify(json.ukFhlProperty));",
+                      "        if (json.ukProperty)     console.log('ukProperty present:',     JSON.stringify(json.ukProperty));",
+                      "    } catch(e) {}",
+                      "",
+                      "// ── 400 Bad Request tests ────────────────────────────────────────────────────",
+                      "} else if (pm.response.code === 400) {",
+                      "",
+                      "    pm.test('Status is 400 Bad Request', () => { pm.response.to.have.status(400); });",
+                      "    pm.test('X-CorrelationId header is present', () => { pm.response.to.have.header('X-CorrelationId'); });",
+                      "    pm.test('Error response has required field: code', () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json).to.have.property('code').that.is.a('string');",
+                      "    });",
+                      "    console.warn('400 Bad Request - code:', pm.response.json().code, '| message:', pm.response.json().message);",
+                      "",
+                      "// ── 403 Forbidden tests ──────────────────────────────────────────────────────",
+                      "} else if (pm.response.code === 403) {",
+                      "",
+                      "    pm.test('Status is 403 Forbidden', () => { pm.response.to.have.status(403); });",
+                      "    pm.test('X-CorrelationId header is present', () => { pm.response.to.have.header('X-CorrelationId'); });",
+                      "    pm.test('Error response has required field: code', () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json).to.have.property('code').that.is.a('string');",
+                      "    });",
+                      "    console.warn('403 Forbidden - code:', pm.response.json().code, '| message:', pm.response.json().message);",
+                      "",
+                      "// ── 404 Not Found tests ──────────────────────────────────────────────────────",
+                      "} else if (pm.response.code === 404) {",
+                      "",
+                      "    pm.test('Status is 404 Not Found', () => { pm.response.to.have.status(404); });",
+                      "    pm.test('X-CorrelationId header is present', () => { pm.response.to.have.header('X-CorrelationId'); });",
+                      "    pm.test('Error response has required field: code', () => {",
+                      "        const json = pm.response.json();",
+                      "        pm.expect(json).to.have.property('code').that.is.a('string');",
+                      "    });",
+                      "    console.warn('404 Not Found - code:', pm.response.json().code, '| message:', pm.response.json().message);",
+                      "",
+                      "// ── Unexpected status ────────────────────────────────────────────────────────",
+                      "} else {",
+                      "    pm.test('Unexpected status code: ' + pm.response.code, () => {",
+                      "        pm.expect.fail('Received unexpected HTTP status: ' + pm.response.code);",
+                      "    });",
+                      "}"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/vnd.hmrc.6.0+json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}"
+                  },
+                  {
+                    "key": "Gov-Test-Scenario",
+                    "value": "UK_PROPERTY"
+                  },
+                  {
+                    "key": "Gov-Client-Connection-Method",
+                    "value": "WEB_APP_VIA_SERVER"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP",
+                    "value": "{{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP-Timestamp",
+                    "value": "{{gov_client_public_ip_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-Port",
+                    "value": "{{gov_client_public_port}}"
+                  },
+                  {
+                    "key": "Gov-Client-Device-ID",
+                    "value": "{{gov_client_device_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-User-IDs",
+                    "value": "user={{gov_client_user_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-Timezone",
+                    "value": "UTC+00:00"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs",
+                    "value": "{{gov_client_local_ips}}"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs-Timestamp",
+                    "value": "{{gov_client_local_ips_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Screens",
+                    "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                  },
+                  {
+                    "key": "Gov-Client-Window-Size",
+                    "value": "width=1224&height=800"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Plugins",
+                    "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-JS-User-Agent",
+                    "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Do-Not-Track",
+                    "value": "true"
+                  },
+                  {
+                    "key": "Gov-Client-Multi-Factor",
+                    "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                  },
+                  {
+                    "key": "Gov-Vendor-Version",
+                    "value": "{{gov_vendor_version}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Public-IP",
+                    "value": "{{gov_vendor_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Forwarded",
+                    "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Product-Name",
+                    "value": "{{gov_vendor_product_name}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-License-IDs",
+                    "value": "{{gov_vendor_license_ids}}"
+                  },
+                  {
+                    "key": "Gov-Client-MAC-Addresses",
+                    "value": "00-14-22-01-23-45",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-User-Agent",
+                    "value": "PostmanRuntime/7.0",
+                    "disabled": true
+                  }
+                ],
+                "url": {
+                  "raw": "https://test-api.service.hmrc.gov.uk/individuals/business/property/uk/{{nino}}/{{businessId}}/annual/{{taxYear}}",
+                  "protocol": "https",
+                  "host": [
+                    "test-api",
+                    "service",
+                    "hmrc",
+                    "gov",
+                    "uk"
+                  ],
+                  "path": [
+                    "individuals",
+                    "business",
+                    "property",
+                    "uk",
+                    "{{nino}}",
+                    "{{businessId}}",
+                    "annual",
+                    "{{taxYear}}"
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Retrieve a UK Property Business Annual Submission",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/vnd.hmrc.6.0+json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{access_token}}"
+                      },
+                      {
+                        "key": "Gov-Test-Scenario",
+                        "value": "UK_PROPERTY"
+                      },
+                      {
+                        "key": "Gov-Client-Connection-Method",
+                        "value": "WEB_APP_VIA_SERVER"
+                      },
+                      {
+                        "key": "Gov-Client-Public-IP",
+                        "value": "{{gov_client_public_ip}}"
+                      },
+                      {
+                        "key": "Gov-Client-Public-IP-Timestamp",
+                        "value": "{{gov_client_public_ip_ts}}"
+                      },
+                      {
+                        "key": "Gov-Client-Public-Port",
+                        "value": "{{gov_client_public_port}}"
+                      },
+                      {
+                        "key": "Gov-Client-Device-ID",
+                        "value": "{{gov_client_device_id}}"
+                      },
+                      {
+                        "key": "Gov-Client-User-IDs",
+                        "value": "user={{gov_client_user_id}}"
+                      },
+                      {
+                        "key": "Gov-Client-Timezone",
+                        "value": "UTC+00:00"
+                      },
+                      {
+                        "key": "Gov-Client-Local-IPs",
+                        "value": "{{gov_client_local_ips}}"
+                      },
+                      {
+                        "key": "Gov-Client-Local-IPs-Timestamp",
+                        "value": "{{gov_client_local_ips_ts}}"
+                      },
+                      {
+                        "key": "Gov-Client-Screens",
+                        "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                      },
+                      {
+                        "key": "Gov-Client-Window-Size",
+                        "value": "width=1224&height=800"
+                      },
+                      {
+                        "key": "Gov-Client-Browser-Plugins",
+                        "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                      },
+                      {
+                        "key": "Gov-Client-Browser-JS-User-Agent",
+                        "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                      },
+                      {
+                        "key": "Gov-Client-Browser-Do-Not-Track",
+                        "value": "true"
+                      },
+                      {
+                        "key": "Gov-Client-Multi-Factor",
+                        "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                      },
+                      {
+                        "key": "Gov-Vendor-Version",
+                        "value": "{{gov_vendor_version}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-Public-IP",
+                        "value": "{{gov_vendor_public_ip}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-Forwarded",
+                        "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-Product-Name",
+                        "value": "{{gov_vendor_product_name}}"
+                      },
+                      {
+                        "key": "Gov-Vendor-License-IDs",
+                        "value": "{{gov_vendor_license_ids}}"
+                      },
+                      {
+                        "key": "Gov-Client-MAC-Addresses",
+                        "value": "00-14-22-01-23-45",
+                        "disabled": true
+                      },
+                      {
+                        "key": "Gov-Client-User-Agent",
+                        "value": "PostmanRuntime/7.0",
+                        "disabled": true
+                      }
+                    ],
+                    "url": {
+                      "raw": "https://test-api.service.hmrc.gov.uk/individuals/business/property/uk/{{nino}}/{{businessId}}/annual/{{taxYear}}",
+                      "protocol": "https",
+                      "host": [
+                        "test-api",
+                        "service",
+                        "hmrc",
+                        "gov",
+                        "uk"
+                      ],
+                      "path": [
+                        "individuals",
+                        "business",
+                        "property",
+                        "uk",
+                        "{{nino}}",
+                        "{{businessId}}",
+                        "annual",
+                        "{{taxYear}}"
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": ":status",
+                      "value": 200
+                    },
+                    {
+                      "key": "content-type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "date",
+                      "value": "Tue, 24 Mar 2026 17:05:22 GMT"
+                    },
+                    {
+                      "key": "content-security-policy",
+                      "value": "default-src 'self'"
+                    },
+                    {
+                      "key": "x-frame-options",
+                      "value": "SAMEORIGIN"
+                    },
+                    {
+                      "key": "cache-control",
+                      "value": "no-cache,no-store,max-age=0"
+                    },
+                    {
+                      "key": "strict-transport-security",
+                      "value": "max-age=31536000;"
+                    },
+                    {
+                      "key": "vary",
+                      "value": "Origin, accept-encoding"
+                    },
+                    {
+                      "key": "x-content-type-options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "x-correlationid",
+                      "value": "34bb2649-0488-4dd3-9bff-b40e43518d7f"
+                    },
+                    {
+                      "key": "x-envoy-upstream-service-time",
+                      "value": "35"
+                    },
+                    {
+                      "key": "content-encoding",
+                      "value": "gzip"
+                    },
+                    {
+                      "key": "x-cache",
+                      "value": "Miss from cloudfront"
+                    },
+                    {
+                      "key": "via",
+                      "value": "1.1 49810345bf6ae2e25866372144f1838c.cloudfront.net (CloudFront)"
+                    },
+                    {
+                      "key": "x-amz-cf-pop",
+                      "value": "LHR50-P6"
+                    },
+                    {
+                      "key": "x-amz-cf-id",
+                      "value": "2zl-qZuXauoauxqSfyCpNYQ92Dxgvj6wREAf23Q1qZhlGOvwaHQNGA=="
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"submittedOn\": \"2022-06-17T10:53:38.000Z\",\n    \"ukFhlProperty\": {\n        \"adjustments\": {\n            \"privateUseAdjustment\": 454.45,\n            \"balancingCharge\": 231.45,\n            \"periodOfGraceAdjustment\": true,\n            \"businessPremisesRenovationAllowanceBalancingCharges\": 567.67,\n            \"nonResidentLandlord\": true,\n            \"rentARoom\": {\n                \"jointlyLet\": true\n            }\n        },\n        \"allowances\": {\n            \"annualInvestmentAllowance\": 123.45,\n            \"businessPremisesRenovationAllowance\": 345.56,\n            \"otherCapitalAllowance\": 345.34,\n            \"electricChargePointAllowance\": 453.34,\n            \"zeroEmissionsCarAllowance\": 123.12\n        }\n    },\n    \"ukProperty\": {\n        \"adjustments\": {\n            \"balancingCharge\": 565.34,\n            \"privateUseAdjustment\": 533.54,\n            \"businessPremisesRenovationAllowanceBalancingCharges\": 563.34,\n            \"nonResidentLandlord\": true,\n            \"rentARoom\": {\n                \"jointlyLet\": true\n            }\n        },\n        \"allowances\": {\n            \"annualInvestmentAllowance\": 678.45,\n            \"zeroEmissionsGoodsVehicleAllowance\": 456.34,\n            \"businessPremisesRenovationAllowance\": 573.45,\n            \"otherCapitalAllowance\": 452.34,\n            \"costOfReplacingDomesticItems\": 567.34,\n            \"structuredBuildingAllowance\": [\n                {\n                    \"amount\": 234.34,\n                    \"firstYear\": {\n                        \"qualifyingDate\": \"2020-03-29\",\n                        \"qualifyingAmountExpenditure\": 3434.45\n                    },\n                    \"building\": {\n                        \"name\": \"Plaza\",\n                        \"number\": \"1\",\n                        \"postcode\": \"TF3 4EH\"\n                    }\n                }\n            ],\n            \"enhancedStructuredBuildingAllowance\": [\n                {\n                    \"amount\": 234.45,\n                    \"firstYear\": {\n                        \"qualifyingDate\": \"2020-05-29\",\n                        \"qualifyingAmountExpenditure\": 453.34\n                    },\n                    \"building\": {\n                        \"name\": \"Plaza 2\",\n                        \"number\": \"2\",\n                        \"postcode\": \"TF3 4ER\"\n                    }\n                }\n            ],\n            \"zeroEmissionsCarAllowance\": 454.34\n        }\n    }\n}"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Obligations API",
+      "item": [
+        {
+          "name": "Retrieve Income Tax (Self Assessment) Income and Expenditure Obligations",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Ensure access token exists",
+                  "const token = pm.variables.get('access_token');",
+                  "if (!token) {",
+                  "  throw new Error('Missing {{access_token}}. Set it as a global/environment/collection variable.');",
+                  "}",
+                  "",
+                  "function isoNow() { return new Date().toISOString(); }",
+                  "",
+                  "function uuidv4() {",
+                  "  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {",
+                  "    const r = (Math.random() * 16) | 0;",
+                  "    const v = c === 'x' ? r : (r & 0x3) | 0x8;",
+                  "    return v.toString(16);",
+                  "  });",
+                  "}",
+                  "",
+                  "// Device ID — persist across runs",
+                  "if (!pm.collectionVariables.get('gov_client_device_id') || pm.collectionVariables.get('gov_client_device_id') === 'device-12345') {",
+                  "  pm.collectionVariables.set('gov_client_device_id', uuidv4());",
+                  "}",
+                  "",
+                  "if (!pm.collectionVariables.get('gov_client_public_ip')) pm.collectionVariables.set('gov_client_public_ip', '198.51.100.1');",
+                  "if (!pm.collectionVariables.get('gov_client_public_port')) pm.collectionVariables.set('gov_client_public_port', '49673');",
+                  "if (!pm.collectionVariables.get('gov_client_user_id')) pm.collectionVariables.set('gov_client_user_id', 'none');",
+                  "",
+                  "function randomPrivateIP() {",
+                  "  return '10.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255) + '.' + (1 + Math.floor(Math.random()*254));",
+                  "}",
+                  "pm.collectionVariables.set('gov_client_local_ips', randomPrivateIP() + ',' + randomPrivateIP());",
+                  "",
+                  "if (!pm.collectionVariables.get('gov_vendor_version')) pm.collectionVariables.set('gov_vendor_version', 'Postman-MTD=1.0.0');",
+                  "if (!pm.collectionVariables.get('gov_vendor_public_ip')) pm.collectionVariables.set('gov_vendor_public_ip', '198.51.100.2');",
+                  "if (!pm.collectionVariables.get('gov_vendor_product_name')) pm.collectionVariables.set('gov_vendor_product_name', 'Postman%20MTD%20Bridge');",
+                  "if (!pm.collectionVariables.get('gov_vendor_license_ids')) pm.collectionVariables.set('gov_vendor_license_ids', 'postman=00000000-0000-0000-0000-000000000000');",
+                  "",
+                  "// Refresh timestamps",
+                  "pm.collectionVariables.set('gov_client_public_ip_ts', isoNow());",
+                  "pm.collectionVariables.set('gov_client_local_ips_ts', isoNow());",
+                  "const mfaTs = isoNow();",
+                  "pm.collectionVariables.set('gov_client_mfa_ts', mfaTs);",
+                  "",
+                  "// Build Gov-Client-Multi-Factor with percent-encoded timestamp",
+                  "const mfaHeaderValue = 'type=OTHER&timestamp=' + encodeURIComponent(mfaTs) + '&unique-reference=ref-123456';",
+                  "pm.request.headers.upsert({ key: 'Gov-Client-Multi-Factor', value: mfaHeaderValue });",
+                  "",
+                  "// Default date range: today minus 365 days to today (if not set)",
+                  "if (!pm.collectionVariables.get('obligations_from_date')) {",
+                  "  const from = new Date();",
+                  "  from.setDate(from.getDate() - 365);",
+                  "  pm.collectionVariables.set('obligations_from_date', from.toISOString().split('T')[0]);",
+                  "}",
+                  "if (!pm.collectionVariables.get('obligations_to_date')) {",
+                  "  pm.collectionVariables.set('obligations_to_date', new Date().toISOString().split('T')[0]);",
+                  "}",
+                  "",
+                  "// Warn if nino not set",
+                  "if (!pm.collectionVariables.get('nino')) {",
+                  "  pm.collectionVariables.set('nino', 'AA999999A');",
+                  "  console.warn('nino not set — using placeholder AA999999A');",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is JSON', () => {",
+                  "  pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "pm.test('Response has obligations array', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('obligations');",
+                  "  pm.expect(json.obligations).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Each obligation has typeOfBusiness and obligationDetails', () => {",
+                  "  const json = pm.response.json();",
+                  "  json.obligations.forEach((ob, i) => {",
+                  "    pm.expect(ob, `obligation[${i}]`).to.have.property('typeOfBusiness');",
+                  "    pm.expect(ob, `obligation[${i}]`).to.have.property('obligationDetails');",
+                  "    pm.expect(ob.obligationDetails, `obligation[${i}].obligationDetails`).to.be.an('array');",
+                  "  });",
+                  "});",
+                  "",
+                  "// Log summary of obligations found",
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  if (json.obligations) {",
+                  "    json.obligations.forEach((ob, i) => {",
+                  "      console.log(`Obligation[${i}]: ${ob.typeOfBusiness} | businessId: ${ob.businessId || 'N/A'} | ${ob.obligationDetails.length} period(s)`);",
+                  "      ob.obligationDetails.forEach((d, j) => {",
+                  "        console.log(`  Period[${j}]: ${d.periodStartDate} to ${d.periodEndDate} | status: ${d.status} | due: ${d.dueDate}`);",
+                  "      });",
+                  "    });",
+                  "  }",
+                  "} catch(e) {}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.hmrc.3.0+json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Gov-Test-Scenario",
+                "value": "DEFAULT",
+                "disabled": true
+              },
+              {
+                "key": "Gov-Client-Connection-Method",
+                "value": "WEB_APP_VIA_SERVER"
+              },
+              {
+                "key": "Gov-Client-Public-IP",
+                "value": "{{gov_client_public_ip}}"
+              },
+              {
+                "key": "Gov-Client-Public-IP-Timestamp",
+                "value": "{{gov_client_public_ip_ts}}"
+              },
+              {
+                "key": "Gov-Client-Public-Port",
+                "value": "{{gov_client_public_port}}"
+              },
+              {
+                "key": "Gov-Client-Device-ID",
+                "value": "{{gov_client_device_id}}"
+              },
+              {
+                "key": "Gov-Client-User-IDs",
+                "value": "user={{gov_client_user_id}}"
+              },
+              {
+                "key": "Gov-Client-Timezone",
+                "value": "UTC+00:00"
+              },
+              {
+                "key": "Gov-Client-Local-IPs",
+                "value": "{{gov_client_local_ips}}"
+              },
+              {
+                "key": "Gov-Client-Local-IPs-Timestamp",
+                "value": "{{gov_client_local_ips_ts}}"
+              },
+              {
+                "key": "Gov-Client-Screens",
+                "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+              },
+              {
+                "key": "Gov-Client-Window-Size",
+                "value": "width=1224&height=800"
+              },
+              {
+                "key": "Gov-Client-Browser-Plugins",
+                "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+              },
+              {
+                "key": "Gov-Client-Browser-JS-User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+              },
+              {
+                "key": "Gov-Client-Browser-Do-Not-Track",
+                "value": "true"
+              },
+              {
+                "key": "Gov-Client-Multi-Factor",
+                "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+              },
+              {
+                "key": "Gov-Vendor-Version",
+                "value": "{{gov_vendor_version}}"
+              },
+              {
+                "key": "Gov-Vendor-Public-IP",
+                "value": "{{gov_vendor_public_ip}}"
+              },
+              {
+                "key": "Gov-Vendor-Forwarded",
+                "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+              },
+              {
+                "key": "Gov-Vendor-Product-Name",
+                "value": "{{gov_vendor_product_name}}"
+              },
+              {
+                "key": "Gov-Vendor-License-IDs",
+                "value": "{{gov_vendor_license_ids}}"
+              },
+              {
+                "key": "Gov-Client-MAC-Addresses",
+                "value": "00-14-22-01-23-45",
+                "disabled": true
+              },
+              {
+                "key": "Gov-Client-User-Agent",
+                "value": "PostmanRuntime/7.0",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "https://test-api.service.hmrc.gov.uk/obligations/details/{{nino}}/income-and-expenditure?status={{obligations_status}}",
+              "protocol": "https",
+              "host": [
+                "test-api",
+                "service",
+                "hmrc",
+                "gov",
+                "uk"
+              ],
+              "path": [
+                "obligations",
+                "details",
+                "{{nino}}",
+                "income-and-expenditure"
+              ],
+              "query": [
+                {
+                  "key": "typeOfBusiness",
+                  "value": "{{type_of_business}}",
+                  "description": "self-employment | uk-property | foreign-property. Required if businessId is provided.",
+                  "disabled": true
+                },
+                {
+                  "key": "businessId",
+                  "value": "{{business_id}}",
+                  "description": "Unique business identifier e.g. XAIS12345678901",
+                  "disabled": true
+                },
+                {
+                  "key": "fromDate",
+                  "value": "{{obligations_from_date}}",
+                  "description": "Start date YYYY-MM-DD. Mandatory if toDate supplied. Max 366 days range.",
+                  "disabled": true
+                },
+                {
+                  "key": "toDate",
+                  "value": "{{obligations_to_date}}",
+                  "description": "End date YYYY-MM-DD. Mandatory if fromDate supplied. Max 366 days range.",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "{{obligations_status}}",
+                  "description": "open | fulfilled. Omit to return both."
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Retrieve Income Tax (Self Assessment) Income and Expenditure Obligations",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/vnd.hmrc.3.0+json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}"
+                  },
+                  {
+                    "key": "Gov-Test-Scenario",
+                    "value": "DEFAULT",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-Connection-Method",
+                    "value": "WEB_APP_VIA_SERVER"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP",
+                    "value": "{{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-IP-Timestamp",
+                    "value": "{{gov_client_public_ip_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Public-Port",
+                    "value": "{{gov_client_public_port}}"
+                  },
+                  {
+                    "key": "Gov-Client-Device-ID",
+                    "value": "{{gov_client_device_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-User-IDs",
+                    "value": "user={{gov_client_user_id}}"
+                  },
+                  {
+                    "key": "Gov-Client-Timezone",
+                    "value": "UTC+00:00"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs",
+                    "value": "{{gov_client_local_ips}}"
+                  },
+                  {
+                    "key": "Gov-Client-Local-IPs-Timestamp",
+                    "value": "{{gov_client_local_ips_ts}}"
+                  },
+                  {
+                    "key": "Gov-Client-Screens",
+                    "value": "width=1920&height=1080&scaling-factor=1&colour-depth=32"
+                  },
+                  {
+                    "key": "Gov-Client-Window-Size",
+                    "value": "width=1224&height=800"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Plugins",
+                    "value": "PDF%20Viewer,Chrome%20PDF%20Viewer,Chromium%20PDF%20Viewer,Microsoft%20Edge%20PDF%20Viewer,WebKit%20built-in%20PDF"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-JS-User-Agent",
+                    "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                  },
+                  {
+                    "key": "Gov-Client-Browser-Do-Not-Track",
+                    "value": "true"
+                  },
+                  {
+                    "key": "Gov-Client-Multi-Factor",
+                    "value": "type=OTHER&timestamp={{gov_client_mfa_ts}}&unique-reference=ref-123456"
+                  },
+                  {
+                    "key": "Gov-Vendor-Version",
+                    "value": "{{gov_vendor_version}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Public-IP",
+                    "value": "{{gov_vendor_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Forwarded",
+                    "value": "by={{gov_vendor_public_ip}}&for={{gov_client_public_ip}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-Product-Name",
+                    "value": "{{gov_vendor_product_name}}"
+                  },
+                  {
+                    "key": "Gov-Vendor-License-IDs",
+                    "value": "{{gov_vendor_license_ids}}"
+                  },
+                  {
+                    "key": "Gov-Client-MAC-Addresses",
+                    "value": "00-14-22-01-23-45",
+                    "disabled": true
+                  },
+                  {
+                    "key": "Gov-Client-User-Agent",
+                    "value": "PostmanRuntime/7.0",
+                    "disabled": true
+                  }
+                ],
+                "url": {
+                  "raw": "https://test-api.service.hmrc.gov.uk/obligations/details/{{nino}}/income-and-expenditure?status={{obligations_status}}",
+                  "protocol": "https",
+                  "host": [
+                    "test-api",
+                    "service",
+                    "hmrc",
+                    "gov",
+                    "uk"
+                  ],
+                  "path": [
+                    "obligations",
+                    "details",
+                    "{{nino}}",
+                    "income-and-expenditure"
+                  ],
+                  "query": [
+                    {
+                      "key": "typeOfBusiness",
+                      "value": "{{type_of_business}}",
+                      "description": "self-employment | uk-property | foreign-property. Required if businessId is provided.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "businessId",
+                      "value": "{{business_id}}",
+                      "description": "Unique business identifier e.g. XAIS12345678901",
+                      "disabled": true
+                    },
+                    {
+                      "key": "fromDate",
+                      "value": "{{obligations_from_date}}",
+                      "description": "Start date YYYY-MM-DD. Mandatory if toDate supplied. Max 366 days range.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "toDate",
+                      "value": "{{obligations_to_date}}",
+                      "description": "End date YYYY-MM-DD. Mandatory if fromDate supplied. Max 366 days range.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "status",
+                      "value": "{{obligations_status}}",
+                      "description": "open | fulfilled. Omit to return both."
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "",
+              "header": [
+                {
+                  "key": ":status",
+                  "value": 200
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "date",
+                  "value": "Tue, 24 Mar 2026 15:09:55 GMT"
+                },
+                {
+                  "key": "x-frame-options",
+                  "value": "SAMEORIGIN"
+                },
+                {
+                  "key": "x-content-type-options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "no-cache,no-store,max-age=0"
+                },
+                {
+                  "key": "strict-transport-security",
+                  "value": "max-age=31536000;"
+                },
+                {
+                  "key": "vary",
+                  "value": "Origin, accept-encoding"
+                },
+                {
+                  "key": "x-correlationid",
+                  "value": "aefbe5eb-7cac-4e51-a04f-9ae275d66fc8"
+                },
+                {
+                  "key": "x-envoy-upstream-service-time",
+                  "value": "30"
+                },
+                {
+                  "key": "content-security-policy",
+                  "value": "default-src 'self'"
+                },
+                {
+                  "key": "content-encoding",
+                  "value": "gzip"
+                },
+                {
+                  "key": "x-cache",
+                  "value": "Miss from cloudfront"
+                },
+                {
+                  "key": "via",
+                  "value": "1.1 3427bd36a639eb3b1aabb3fa0043e296.cloudfront.net (CloudFront)"
+                },
+                {
+                  "key": "x-amz-cf-pop",
+                  "value": "LHR50-P6"
+                },
+                {
+                  "key": "x-amz-cf-id",
+                  "value": "O5squap2mo5eK_1Xc5vsyPEeTYkGVBY_kvKrlUWNVf08rDt0txAVZw=="
+                }
+              ],
+              "cookie": [
+                {
+                  "expires": "Invalid Date",
+                  "domain": "",
+                  "path": ""
+                }
+              ],
+              "body": "{\n    \"obligations\": [\n        {\n            \"typeOfBusiness\": \"self-employment\",\n            \"businessId\": \"XBIS12345678901\",\n            \"obligationDetails\": [\n                {\n                    \"periodStartDate\": \"2018-04-06\",\n                    \"periodEndDate\": \"2018-07-05\",\n                    \"dueDate\": \"2018-08-05\",\n                    \"receivedDate\": \"2018-08-01\",\n                    \"status\": \"fulfilled\"\n                },\n                {\n                    \"periodStartDate\": \"2018-07-06\",\n                    \"periodEndDate\": \"2018-10-05\",\n                    \"dueDate\": \"2018-11-05\",\n                    \"status\": \"open\"\n                },\n                {\n                    \"periodStartDate\": \"2018-10-06\",\n                    \"periodEndDate\": \"2019-01-05\",\n                    \"dueDate\": \"2019-02-05\",\n                    \"status\": \"open\"\n                },\n                {\n                    \"periodStartDate\": \"2019-01-06\",\n                    \"periodEndDate\": \"2019-04-05\",\n                    \"dueDate\": \"2019-05-05\",\n                    \"status\": \"open\"\n                }\n            ]\n        },\n        {\n            \"typeOfBusiness\": \"uk-property\",\n            \"businessId\": \"XPIS12345678901\",\n            \"obligationDetails\": [\n                {\n                    \"periodStartDate\": \"2018-04-06\",\n                    \"periodEndDate\": \"2018-07-05\",\n                    \"dueDate\": \"2018-08-05\",\n                    \"receivedDate\": \"2018-08-01\",\n                    \"status\": \"fulfilled\"\n                },\n                {\n                    \"periodStartDate\": \"2018-07-06\",\n                    \"periodEndDate\": \"2018-10-05\",\n                    \"dueDate\": \"2018-11-05\",\n                    \"status\": \"open\"\n                },\n                {\n                    \"periodStartDate\": \"2018-10-06\",\n                    \"periodEndDate\": \"2019-01-05\",\n                    \"dueDate\": \"2019-02-05\",\n                    \"status\": \"open\"\n                },\n                {\n                    \"periodStartDate\": \"2019-01-06\",\n                    \"periodEndDate\": \"2019-04-05\",\n                    \"dueDate\": \"2019-05-06\",\n                    \"status\": \"open\"\n                }\n            ]\n        },\n        {\n            \"typeOfBusiness\": \"foreign-property\",\n            \"businessId\": \"XFIS12345678901\",\n            \"obligationDetails\": [\n                {\n                    \"periodStartDate\": \"2021-04-06\",\n                    \"periodEndDate\": \"2021-07-05\",\n                    \"dueDate\": \"2021-08-05\",\n                    \"receivedDate\": \"2021-08-01\",\n                    \"status\": \"fulfilled\"\n                },\n                {\n                    \"periodStartDate\": \"2021-07-06\",\n                    \"periodEndDate\": \"2021-10-05\",\n                    \"dueDate\": \"2021-11-05\",\n                    \"status\": \"open\"\n                },\n                {\n                    \"periodStartDate\": \"2021-10-06\",\n                    \"periodEndDate\": \"2022-01-05\",\n                    \"dueDate\": \"2022-02-05\",\n                    \"status\": \"open\"\n                },\n                {\n                    \"periodStartDate\": \"2022-01-06\",\n                    \"periodEndDate\": \"2022-04-05\",\n                    \"dueDate\": \"2022-05-06\",\n                    \"status\": \"open\"\n                }\n            ]\n        }\n    ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hello HMRC",
+      "protocolProfileBehavior": {
+        "disabledSystemHeaders": {
+          "accept": true
+        }
+      },
+      "request": {
+        "auth": {
+          "type": "inherit"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/vnd.hmrc.1.0+json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "https://test-api.service.hmrc.gov.uk/hello/world",
+          "protocol": "https",
+          "host": [
+            "test-api",
+            "service",
+            "hmrc",
+            "gov",
+            "uk"
+          ],
+          "path": [
+            "hello",
+            "world"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Hello HMRC",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.hmrc.1.0+json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://test-api.service.hmrc.gov.uk/hello/world",
+              "protocol": "https",
+              "host": [
+                "test-api",
+                "service",
+                "hmrc",
+                "gov",
+                "uk"
+              ],
+              "path": [
+                "hello",
+                "world"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": ":status",
+              "value": 200
+            },
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "content-length",
+              "value": "25"
+            },
+            {
+              "key": "date",
+              "value": "Tue, 10 Mar 2026 16:21:19 GMT"
+            },
+            {
+              "key": "x-content-type-options",
+              "value": "nosniff"
+            },
+            {
+              "key": "cache-control",
+              "value": "no-cache,no-store,max-age=0"
+            },
+            {
+              "key": "strict-transport-security",
+              "value": "max-age=31536000;"
+            },
+            {
+              "key": "vary",
+              "value": "Accept"
+            },
+            {
+              "key": "x-envoy-upstream-service-time",
+              "value": "5"
+            },
+            {
+              "key": "content-security-policy",
+              "value": "default-src 'self'"
+            },
+            {
+              "key": "x-frame-options",
+              "value": "SAMEORIGIN"
+            },
+            {
+              "key": "x-cache",
+              "value": "Miss from cloudfront"
+            },
+            {
+              "key": "via",
+              "value": "1.1 80ae708211d4654b19a754784a515e76.cloudfront.net (CloudFront)"
+            },
+            {
+              "key": "x-amz-cf-pop",
+              "value": "LHR50-P6"
+            },
+            {
+              "key": "x-amz-cf-id",
+              "value": "EiE7yyLwAd5_V5JSmFxcGqtHRnWBDjGcShOunwnbwiwE5zK5vg3nCg=="
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"message\": \"Hello World\"\n}"
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "oauth2",
+    "oauth2": [
+      {
+        "key": "tokenType",
+        "value": "bearer",
+        "type": "string"
+      },
+      {
+        "key": "accessToken",
+        "value": "{{access_token}}",
+        "type": "string"
+      },
+      {
+        "key": "clientSecret",
+        "value": "{{client_secret}}",
+        "type": "string"
+      },
+      {
+        "key": "clientId",
+        "value": "{{client_id}}",
+        "type": "string"
+      },
+      {
+        "key": "client_authentication",
+        "value": "body",
+        "type": "string"
+      },
+      {
+        "key": "scope",
+        "value": "read:self-assessment\nwrite:self-assessment",
+        "type": "string"
+      },
+      {
+        "key": "accessTokenUrl",
+        "value": "https://test-api.service.hmrc.gov.uk/oauth/token",
+        "type": "string"
+      },
+      {
+        "key": "authUrl",
+        "value": "https://test-api.service.hmrc.gov.uk/oauth/authorize",
+        "type": "string"
+      },
+      {
+        "key": "tokenName",
+        "value": "HMRC 3.0",
+        "type": "string"
+      },
+      {
+        "key": "addTokenTo",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "requests": {},
+        "exec": [
+          "function isoNow() {",
+          "  return new Date().toISOString();",
+          "}",
+          "",
+          "function uuidv4() {",
+          "  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {",
+          "    const r = (Math.random() * 16) | 0;",
+          "    const v = c === 'x' ? r : (r & 0x3) | 0x8;",
+          "    return v.toString(16);",
+          "  });",
+          "}",
+          "",
+          "// Generate gov_client_device_id once (persist across runs), reset if placeholder",
+          "if (!pm.collectionVariables.get('gov_client_device_id') || pm.collectionVariables.get('gov_client_device_id') === 'device-12345') {",
+          "  pm.collectionVariables.set('gov_client_device_id', uuidv4());",
+          "}",
+          "",
+          "// Set placeholder variables only if not already set",
+          "if (!pm.collectionVariables.get('gov_client_public_ip')) {",
+          "  pm.collectionVariables.set('gov_client_public_ip', '198.51.100.1');",
+          "}",
+          "if (!pm.collectionVariables.get('gov_client_public_port')) {",
+          "  pm.collectionVariables.set('gov_client_public_port', '49673');",
+          "}",
+          "if (!pm.collectionVariables.get('gov_client_user_id')) {",
+          "  pm.collectionVariables.set('gov_client_user_id', 'none');",
+          "}",
+          "",
+          "// Always regenerate local IPs as real IPv4 addresses (HMRC requires valid IPs, not hostnames)",
+          "function randomPrivateIP() {",
+          "  return '10.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255) + '.' + (1 + Math.floor(Math.random()*254));",
+          "}",
+          "pm.collectionVariables.set('gov_client_local_ips', randomPrivateIP() + ',' + randomPrivateIP());",
+          "",
+          "if (!pm.collectionVariables.get('gov_vendor_version')) {",
+          "  // Gov-Vendor-Version must be key=value pairs (percent-encoded), e.g. MyApp=1.0.0",
+          "  pm.collectionVariables.set('gov_vendor_version', 'Postman-MTD=1.0.0');",
+          "}",
+          "if (!pm.collectionVariables.get('gov_vendor_public_ip')) {",
+          "  pm.collectionVariables.set('gov_vendor_public_ip', '198.51.100.2');",
+          "}",
+          "if (!pm.collectionVariables.get('gov_vendor_product_name')) {",
+          "  pm.collectionVariables.set('gov_vendor_product_name', 'Postman%20MTD%20Bridge');",
+          "}",
+          "if (!pm.collectionVariables.get('gov_vendor_license_ids')) {",
+          "  pm.collectionVariables.set('gov_vendor_license_ids', 'postman=00000000-0000-0000-0000-000000000000');",
+          "}",
+          "",
+          "// Refresh timestamps on every run",
+          "pm.collectionVariables.set('gov_client_local_ips_ts', isoNow());",
+          "pm.collectionVariables.set('gov_client_public_ip_ts', isoNow());",
+          "pm.collectionVariables.set('gov_client_mfa_ts', isoNow());",
+          "",
+          "// Tax year in yyyy-yy format (e.g. 2024-25) — used by MTD submission endpoints",
+          "const now = new Date();",
+          "const year = now.getFullYear();",
+          "const month = now.getMonth() + 1; // 1-based",
+          "// HMRC tax year runs April 6 to April 5",
+          "const taxYearStart = month < 4 || (month === 4 && now.getDate() < 6) ? year - 1 : year;",
+          "const taxYearEnd = String(taxYearStart + 1).slice(-2);",
+          "pm.collectionVariables.set('tax_year', taxYearStart + '-' + taxYearEnd);"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "hmrc_base_url",
+      "value": ""
+    },
+    {
+      "key": "hmrc_auth_url",
+      "value": ""
+    },
+    {
+      "key": "hmrc_token_url",
+      "value": ""
+    },
+    {
+      "key": "hmrc_client_id",
+      "value": ""
+    },
+    {
+      "key": "hmrc_client_secret",
+      "value": ""
+    },
+    {
+      "key": "hmrc_redirect_uri",
+      "value": ""
+    },
+    {
+      "key": "hmrc_scope",
+      "value": ""
+    },
+    {
+      "key": "gov_client_device_id",
+      "value": ""
+    },
+    {
+      "key": "gov_client_local_ips",
+      "value": ""
+    },
+    {
+      "key": "gov_client_public_ip",
+      "value": ""
+    },
+    {
+      "key": "gov_client_public_ip_ts",
+      "value": ""
+    },
+    {
+      "key": "gov_client_local_ips_ts",
+      "value": ""
+    },
+    {
+      "key": "gov_client_mfa_ts",
+      "value": ""
+    },
+    {
+      "key": "gov_client_connection_method",
+      "value": ""
+    },
+    {
+      "key": "gov_client_timezone",
+      "value": ""
+    },
+    {
+      "key": "gov_client_user_agent",
+      "value": ""
+    },
+    {
+      "key": "gov_client_window_size",
+      "value": ""
+    },
+    {
+      "key": "gov_client_screens",
+      "value": ""
+    },
+    {
+      "key": "gov_client_mac_addresses",
+      "value": ""
+    },
+    {
+      "key": "gov_vendor_forwarded",
+      "value": ""
+    },
+    {
+      "key": "gov_client_public_port",
+      "value": ""
+    },
+    {
+      "key": "gov_client_user_id",
+      "value": ""
+    },
+    {
+      "key": "gov_vendor_version",
+      "value": ""
+    },
+    {
+      "key": "gov_vendor_public_ip",
+      "value": ""
+    },
+    {
+      "key": "gov_vendor_product_name",
+      "value": ""
+    },
+    {
+      "key": "gov_vendor_license_ids",
+      "value": ""
+    },
+    {
+      "key": "client_id",
+      "value": ""
+    },
+    {
+      "key": "client_secret",
+      "value": ""
+    },
+    {
+      "key": "tax_year",
+      "value": ""
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "nino",
+      "value": ""
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "business_id",
+      "value": ""
+    },
+    {
+      "key": "calculation_type",
+      "value": ""
+    },
+    {
+      "key": "calculation_id",
+      "value": ""
+    },
+    {
+      "key": "obligations_from_date",
+      "value": ""
+    },
+    {
+      "key": "obligations_to_date",
+      "value": ""
+    },
+    {
+      "key": "businessId",
+      "value": ""
+    },
+    {
+      "key": "taxYear",
+      "value": ""
+    },
+    {
+      "key": "submissionId",
+      "value": ""
+    }
+  ]
+}
