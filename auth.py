@@ -29,6 +29,7 @@ from database import (
     get_tokens,
     save_state,
     save_tokens,
+    store_pending_session,
     update_access_token,
     validate_and_delete_state,
 )
@@ -92,8 +93,10 @@ async def exchange_code_for_tokens(code: str, state: str) -> str:
     Exchange the authorisation code for an access token and refresh token.
 
     Validates the CSRF state value, then POSTs to HMRC's token endpoint.
-    Stores the tokens in SQLite and returns a new session_id that the
-    Adalo frontend must include as the X-Session-ID header on all future calls.
+    Stores tokens in SQLite, then stores state → session_id in pending_sessions
+    so Adalo can retrieve the session_id via GET /auth/session?state=<state>.
+
+    Returns the new session_id.
     """
     if not validate_and_delete_state(state):
         logger.warning(
@@ -142,6 +145,11 @@ async def exchange_code_for_tokens(code: str, state: str) -> str:
         refresh_token=data.get("refresh_token"),
         expires_at=expires_at,
     )
+
+    # Store state → session_id so Adalo can poll GET /auth/session?state=<state>
+    # to collect the session_id after the user's browser completes the HMRC login.
+    store_pending_session(state, session_id)
+
     return session_id
 
 

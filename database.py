@@ -33,6 +33,15 @@ def init_db() -> None:
                 state      TEXT PRIMARY KEY,
                 created_at INTEGER DEFAULT (strftime('%s','now'))
             );
+
+            -- Maps state → session_id so Adalo can poll for the session_id
+            -- after the user completes the HMRC login flow in a browser.
+            -- Rows are cleaned up after 30 minutes.
+            CREATE TABLE IF NOT EXISTS pending_sessions (
+                state      TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                created_at INTEGER DEFAULT (strftime('%s','now'))
+            );
         """)
 
 
@@ -127,3 +136,35 @@ def validate_and_delete_state(state: str) -> bool:
             conn.execute("DELETE FROM oauth_states WHERE state = ?", (state,))
             return True
         return False
+
+
+# ── Pending session helpers (Adalo polling pattern) ──────────────────────────────
+
+def store_pending_session(state: str, session_id: str) -> None:
+    """
+    After a successful callback, link the OAuth state to the new session_id.
+    Adalo polls GET /auth/session?state=<state> to collect the session_id.
+    """
+    with _conn() as conn:
+        cutoff = int(time.time()) - STATE_TTL_SECS
+        conn.execute("DELETE FROM pending_sessions WHERE created_at < ?", (cutoff,))
+        conn.execute(
+            "INSERT OR REPLACE INTO pending_sessions (state, session_id) VALUES (?, ?)",
+            (state, session_id),
+        )
+
+
+def pop_pending_session(state: str) -> Optional[str]:
+    """
+    Retrieve and immediately delete the session_id for a given state.
+    Single-use: once collected by Adalo the record is removed.
+    Returns None if the state has not yet completed or never existed.
+    """
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT session_id FROM pending_sessions WHERE state = ?", (state,)
+        ).fetchone()
+        if row:
+            conn.execute("DELETE FROM pending_sessions WHERE state = ?", (state,))
+            return row["session_id"]
+        return None

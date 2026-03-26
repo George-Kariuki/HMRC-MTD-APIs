@@ -25,7 +25,7 @@ _startup_logger = logging.getLogger("startup")
 _startup_logger.info("HMRC_CLIENT_ID loaded: %s", os.getenv("HMRC_CLIENT_ID", "NOT SET")[:8] + "...")
 
 from auth import build_auth_url, exchange_code_for_tokens
-from database import init_db
+from database import init_db, pop_pending_session
 from hmrc_client import _resolve_vendor_ip
 from routes import router
 
@@ -87,43 +87,107 @@ async def auth_login():
 @app.get("/auth/login-url", tags=["Auth"])
 async def auth_login_url():
     """
-    Return the HMRC OAuth authorisation URL as JSON.
+    **Step 1 of the Adalo auth flow.**
 
-    Adalo external API actions cannot follow HTTP 302 redirects, so this
-    endpoint returns the URL for the frontend to open in a webview or browser.
+    Returns the HMRC OAuth authorisation URL AND the `state` token.
+
+    Adalo workflow:
+    1. Call this endpoint → store `state` in a hidden Adalo variable or user field.
+    2. Open `auth_url` in the device browser (use Adalo's "Open URL" action).
+    3. User logs in at HMRC — browser is redirected to the callback automatically.
+    4. Poll `GET /auth/session?state=<state>` until `session_id` is returned.
+    5. Store `session_id` in the Adalo user's profile.
+    6. Call `POST /auth/set-nino` with the user's NINO.
 
     Response:
-        {"auth_url": "https://test-api.service.hmrc.gov.uk/oauth/authorize?..."}
+    ```json
+    {
+      "auth_url": "https://test-api.service.hmrc.gov.uk/oauth/authorize?...",
+      "state": "ca945fed-bfed-4bc2-9340-0bfe6aae83e4"
+    }
+    ```
     """
-    url, _ = build_auth_url()
-    return {"auth_url": url}
+    url, state = build_auth_url()
+    return {"auth_url": url, "state": state}
+
+
+@app.get("/auth/session", tags=["Auth"])
+async def auth_session(state: str):
+    """
+    **Step 2 of the Adalo auth flow — poll this after the user logs in at HMRC.**
+
+    Adalo calls this endpoint (every 3–5 seconds) after opening the HMRC login URL.
+    Returns `session_id` once the user has completed the HMRC login; returns 202
+    while still waiting.
+
+    - `ready: false` → user hasn't finished logging in yet; poll again in 3–5 s
+    - `ready: true`  → login complete; `session_id` is ready to store in Adalo
+
+    The `session_id` is single-use from this endpoint — it is deleted from the
+    pending store once collected, but remains valid for all subsequent API calls.
+    """
+    session_id = pop_pending_session(state)
+    if not session_id:
+        return JSONResponse(
+            status_code=202,
+            content={
+                "ready": False,
+                "message": "Login not yet completed. Poll again in a few seconds.",
+            },
+        )
+    return JSONResponse(
+        status_code=200,
+        content={
+            "ready": True,
+            "session_id": session_id,
+            "message": "Login successful. Store session_id and call POST /auth/set-nino next.",
+        },
+    )
 
 
 @app.get("/auth/callback", tags=["Auth"])
 async def auth_callback(code: str, state: str, request: Request):
     """
-    OAuth 2.0 callback — HMRC redirects here after the user authorises.
+    OAuth 2.0 callback — HMRC redirects the user's browser here after login.
 
-    Exchanges the one-time code for tokens, creates a session, and returns the
-    session_id.  Adalo must persist this value and include it as the
-    X-Session-ID header in every subsequent API request.
-
-    After receiving the session_id:
-      1. Prompt the user for their NINO
-      2. Call POST /auth/set-nino  {"nino": "AA123456A"}
-      3. Then call /business-details, /obligations, etc.
+    This endpoint is called by HMRC (via browser redirect), NOT by Adalo.
+    It exchanges the code for tokens and stores them, then shows a success page
+    the user can close. Adalo collects the session_id via GET /auth/session.
     """
     session_id = await exchange_code_for_tokens(code, state)
-    return JSONResponse(
-        content={
-            "session_id": session_id,
-            "message": (
-                "Authentication successful. "
-                "Store this session_id and send it as the X-Session-ID header "
-                "on all future requests. Then call POST /auth/set-nino with your NINO."
-            ),
-        }
-    )
+
+    # Return a clean HTML page the user sees after HMRC login completes.
+    # They can close this tab/window and return to the app.
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HMRC Connected</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; margin: 0; background: #f0fdf4; }}
+    .card {{ background: white; border-radius: 12px; padding: 2rem 2.5rem;
+             box-shadow: 0 4px 24px rgba(0,0,0,0.08); text-align: center;
+             max-width: 400px; }}
+    .tick {{ font-size: 3rem; }}
+    h1 {{ color: #166534; font-size: 1.4rem; margin: 0.5rem 0; }}
+    p {{ color: #64748b; font-size: 0.95rem; line-height: 1.5; }}
+    small {{ color: #94a3b8; font-size: 0.8rem; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="tick">&#x2705;</div>
+    <h1>HMRC Connected Successfully</h1>
+    <p>You can now close this window and return to the app.</p>
+    <small>Session: {session_id[:8]}…</small>
+  </div>
+</body>
+</html>"""
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=html, status_code=200)
 
 
 # ── Root ──────────────────────────────────────────────────────────────────────────
