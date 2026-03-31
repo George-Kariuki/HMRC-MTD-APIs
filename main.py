@@ -28,6 +28,8 @@ from auth import build_auth_url, exchange_code_for_tokens
 from database import init_db, pop_pending_session
 from hmrc_client import _resolve_vendor_ip
 from routes import router
+from xero_database import init_xero_db
+from xero_routes import router as xero_router
 
 
 # ── Application lifespan ──────────────────────────────────────────────────────────
@@ -41,6 +43,7 @@ async def lifespan(app: FastAPI):
          If VENDOR_PUBLIC_IP env var is set, this is a no-op.
     """
     init_db()
+    init_xero_db()
     vendor_ip = _resolve_vendor_ip()
     _startup_logger.info("Gov-Vendor-Public-IP will be: %s", vendor_ip)
     yield
@@ -49,13 +52,14 @@ async def lifespan(app: FastAPI):
 # ── App factory ───────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="HMRC MTD Property Landlord API",
+    title="HMRC MTD & Xero Property Landlord API",
     description=(
-        "Backend service for HMRC Making Tax Digital — Income Tax (Self Assessment). "
-        "Handles OAuth 2.0, fraud prevention headers, and all property business API calls "
-        "so that an Adalo frontend stays simple."
+        "Backend service for property landlords built on Adalo. "
+        "Integrates HMRC Making Tax Digital (Income Tax Self Assessment) with full OAuth 2.0 "
+        "and fraud prevention headers, plus Xero Accounting for bank accounts and transactions. "
+        "All sensitive auth logic lives here — Adalo only calls simple REST endpoints."
     ),
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -70,6 +74,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(xero_router)
 
 
 # ── Auth routes (public, no X-Session-ID required) ───────────────────────────────
@@ -203,4 +208,4 @@ async def root():
 @app.get("/health", tags=["Health"])
 async def health():
     """Simple liveness probe for deployment platforms."""
-    return {"status": "ok", "service": "hmrc-mtd-property-api"}
+    return {"status": "ok", "service": "hmrc-mtd-xero-property-api", "version": "2.0.0"}

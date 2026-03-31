@@ -1,0 +1,808 @@
+{
+  "info": {
+    "_postman_id": "fb0271b3-85b9-40c3-8fe3-3884a2bb71e9",
+    "name": "Xero OAuth 2.0 & Accounting API",
+    "description": "## Xero OAuth 2.0 & Accounting API\n\nThis collection provides a complete integration with the Xero Accounting API using the OAuth 2.0 Authorization Code Grant flow.\n\n### Getting Started\n\n1. Set your `client_id` and `client_secret` collection variables (obtained from the [Xero Developer Portal](https://developer.xero.com/myapps)).\n2. Go to the **Authorization** tab of this collection and click **Get New Access Token**.\n3. Complete the Xero login flow — tokens are saved automatically via the collection post-response script.\n4. Run **Get Connections (Tenants)** in the `2. Connections` folder to populate `tenant_id`.\n5. You're ready to use the Accounting API requests.\n\n### Authentication\n\nOAuth 2.0 Authorization Code Grant is configured at the collection level. All requests inherit this auth unless overridden.\n\n- **Auth URL:** `https://login.xero.com/identity/connect/authorize`\n- **Token URL:** `https://identity.xero.com/connect/token`\n- **Scopes:** `openid profile email offline_access accounting.transactions accounting.settings`\n- **Redirect URI:** `https://oauth.pstmn.io/v1/callback`\n\n### Collection Variables\n\n| Variable | Description |\n|---|---|\n| `client_id` | Your Xero app's Client ID |\n| `client_secret` | Your Xero app's Client Secret |\n| `access_token` | OAuth access token (auto-saved) |\n| `refresh_token` | OAuth refresh token (auto-saved) |\n| `tenant_id` | Xero tenant/organisation ID (auto-saved after running Get Connections) |\n\n### Folder Structure\n\n- **1. OAuth 2.0** — OAuth setup documentation\n- **2. Connections** — Retrieve connected Xero organisations\n- **3. Accounting** — Accounting API requests (bank accounts, transactions)\n- **4. Token Management** — Manually refresh access tokens",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "52497097",
+    "_collection_link": "https://go.postman.co/collection/52497097-fb0271b3-85b9-40c3-8fe3-3884a2bb71e9?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "1. OAuth 2.0",
+      "item": []
+    },
+    {
+      "name": "2. Connections",
+      "item": [
+        {
+          "name": "Get Connections (Tenants)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "pm.test(\"Connections returned\", function () {",
+                  "    pm.expect(jsonData).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "",
+                  "if (jsonData && jsonData.length > 0) {",
+                  "    const tenantId = jsonData[0].tenantId;",
+                  "    pm.collectionVariables.set(\"tenant_id\", tenantId);",
+                  "    console.log(\"Tenant ID saved: \" + tenantId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "disabled": false
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "https://api.xero.com/connections",
+              "protocol": "https",
+              "host": [
+                "api",
+                "xero",
+                "com"
+              ],
+              "path": [
+                "connections"
+              ]
+            },
+            "description": "Generated from cURL: curl -X GET \"https://api.xero.com/connections\" -H \"Authorization: Bearer {{access_token}}\" -H \"Accept: application/json\""
+          },
+          "response": [
+            {
+              "name": "Get Connections (Tenants)",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "disabled": false
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "disabled": false
+                  }
+                ],
+                "url": {
+                  "raw": "https://api.xero.com/connections",
+                  "protocol": "https",
+                  "host": [
+                    "api",
+                    "xero",
+                    "com"
+                  ],
+                  "path": [
+                    "connections"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": ":status",
+                  "value": 200
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "xero-correlation-id",
+                  "value": "ab7609b8-a487-411c-bf0b-1b6be3257efc"
+                },
+                {
+                  "key": "x-appminlimit-remaining",
+                  "value": "9999"
+                },
+                {
+                  "key": "server",
+                  "value": "tpzgw-c"
+                },
+                {
+                  "key": "content-length",
+                  "value": "301"
+                },
+                {
+                  "key": "expires",
+                  "value": "Tue, 31 Mar 2026 12:48:00 GMT"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "max-age=0, no-cache, no-store"
+                },
+                {
+                  "key": "pragma",
+                  "value": "no-cache"
+                },
+                {
+                  "key": "date",
+                  "value": "Tue, 31 Mar 2026 12:48:00 GMT"
+                },
+                {
+                  "key": "x-client-tls-ver",
+                  "value": "tls1.3"
+                }
+              ],
+              "cookie": [],
+              "body": "[\n    {\n        \"id\": \"e79e391d-30fd-4ead-978f-2c809aff38c1\",\n        \"authEventId\": \"11d7f1b3-4031-4215-9631-2ac9bbfc16b1\",\n        \"tenantId\": \"9e1d3371-fcd4-4bf6-8315-efc9051448cc\",\n        \"tenantType\": \"ORGANISATION\",\n        \"tenantName\": \"ComplyLet Pro\",\n        \"createdDateUtc\": \"2026-02-24T17:49:24.7877210\",\n        \"updatedDateUtc\": \"2026-03-31T12:37:25.4466100\"\n    }\n]"
+            }
+          ]
+        }
+      ],
+      "description": "## Connections\n\nThis folder handles the retrieval of **Xero tenant connections** — the organisations that the authenticated user has granted access to via the OAuth 2.0 flow.\n\nAfter completing the OAuth 2.0 authorisation process and obtaining an access token, you must fetch the list of available tenants before making any accounting API calls. Each tenant represents a Xero organisation, and most Xero API endpoints require a valid `Xero-Tenant-Id` header, which is obtained from this step.\n\n### Requests\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| `GET` | `https://api.xero.com/connections` | Returns the list of Xero organisations (tenants) the authenticated user has authorised access to. |\n\n### Authentication\n\nAll requests in this folder require a valid Bearer access token passed in the `Authorization` header:\n\n```\nAuthorization: Bearer {{access_token}}\n```\n\nEnsure the `access_token` variable is set — either via the token exchange step or by running the **Refresh Token** request — before calling any endpoint in this folder."
+    },
+    {
+      "name": "3. Accounting",
+      "item": [
+        {
+          "name": "Get Bank Accounts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "pm.test(\"Accounts returned\", function () {",
+                  "    pm.expect(jsonData.Accounts).to.be.an('array');",
+                  "});",
+                  "",
+                  "if (jsonData.Accounts) {",
+                  "    const bankAccounts = jsonData.Accounts.filter(a => a.Type === \"BANK\");",
+                  "    console.log(\"Bank accounts found: \" + bankAccounts.length);",
+                  "    bankAccounts.forEach(a => console.log(a.Name + \" - \" + a.AccountID));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "disabled": false
+              },
+              {
+                "key": "xero-tenant-id",
+                "value": "{{tenant_id}}",
+                "disabled": false
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "https://api.xero.com/api.xro/2.0/Accounts?where=Type%3D%3D%22BANK%22",
+              "protocol": "https",
+              "host": [
+                "api",
+                "xero",
+                "com"
+              ],
+              "path": [
+                "api.xro",
+                "2.0",
+                "Accounts"
+              ],
+              "query": [
+                {
+                  "key": "where",
+                  "value": "Type%3D%3D%22BANK%22"
+                }
+              ]
+            },
+            "description": "Generated from cURL: curl -X GET \"https://api.xero.com/api.xro/2.0/Accounts?where=Type%3D%3D%22BANK%22\" -H \"Authorization: Bearer {{access_token}}\" -H \"xero-tenant-id: {{tenant_id}}\" -H \"Accept: application/json\""
+          },
+          "response": [
+            {
+              "name": "Get Bank Accounts",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "disabled": false
+                  },
+                  {
+                    "key": "xero-tenant-id",
+                    "value": "{{tenant_id}}",
+                    "disabled": false
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "disabled": false
+                  }
+                ],
+                "url": {
+                  "raw": "https://api.xero.com/api.xro/2.0/Accounts?where=Type%3D%3D%22BANK%22",
+                  "protocol": "https",
+                  "host": [
+                    "api",
+                    "xero",
+                    "com"
+                  ],
+                  "path": [
+                    "api.xro",
+                    "2.0",
+                    "Accounts"
+                  ],
+                  "query": [
+                    {
+                      "key": "where",
+                      "value": "Type%3D%3D%22BANK%22"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": ":status",
+                  "value": 200
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "content-length",
+                  "value": "797"
+                },
+                {
+                  "key": "xero-correlation-id",
+                  "value": "1bec730b-83cc-41c2-b08e-978f0c48ad53"
+                },
+                {
+                  "key": "x-appminlimit-remaining",
+                  "value": "9999"
+                },
+                {
+                  "key": "x-minlimit-remaining",
+                  "value": "59"
+                },
+                {
+                  "key": "x-daylimit-remaining",
+                  "value": "4999"
+                },
+                {
+                  "key": "xero-tenant-id",
+                  "value": "9e1d3371-fcd4-4bf6-8315-efc9051448cc"
+                },
+                {
+                  "key": "server",
+                  "value": "tpzgw-c"
+                },
+                {
+                  "key": "expires",
+                  "value": "Tue, 31 Mar 2026 12:49:34 GMT"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "max-age=0, no-cache, no-store"
+                },
+                {
+                  "key": "pragma",
+                  "value": "no-cache"
+                },
+                {
+                  "key": "date",
+                  "value": "Tue, 31 Mar 2026 12:49:34 GMT"
+                },
+                {
+                  "key": "x-client-tls-ver",
+                  "value": "tls1.3"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"Id\": \"1bec730b-83cc-41c2-b08e-978f0c48ad53\",\n    \"Status\": \"OK\",\n    \"ProviderName\": \"ComplyLet Pro Webapp\",\n    \"DateTimeUTC\": \"/Date(1774961374199)/\",\n    \"Accounts\": [\n        {\n            \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n            \"Code\": \"120\",\n            \"Name\": \"Barclays Business (UK)\",\n            \"Status\": \"ACTIVE\",\n            \"Type\": \"BANK\",\n            \"TaxType\": \"NONE\",\n            \"Class\": \"ASSET\",\n            \"EnablePaymentsToAccount\": false,\n            \"ShowInExpenseClaims\": false,\n            \"BankAccountNumber\": \"20346033730956\",\n            \"BankAccountType\": \"BANK\",\n            \"CurrencyCode\": \"GBP\",\n            \"ReportingCode\": \"ASS\",\n            \"ReportingCodeName\": \"Assets\",\n            \"HasAttachments\": false,\n            \"UpdatedDateUTC\": \"/Date(1773140384700+0000)/\",\n            \"AddToWatchlist\": false\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Bank Transactions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "pm.test(\"BankTransactions returned\", function () {",
+                  "    pm.expect(jsonData.BankTransactions).to.be.an('array');",
+                  "});",
+                  "",
+                  "if (jsonData.BankTransactions) {",
+                  "    const income = jsonData.BankTransactions.filter(t => t.Type === \"RECEIVE\");",
+                  "    const expenses = jsonData.BankTransactions.filter(t => t.Type === \"SPEND\");",
+                  "    console.log(\"Income (RECEIVE) transactions: \" + income.length);",
+                  "    console.log(\"Expense (SPEND) transactions: \" + expenses.length);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "xero-tenant-id",
+                "value": "{{tenant_id}}"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Modified-Since",
+                "value": "{{modified_since}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "https://api.xero.com/api.xro/2.0/BankTransactions?where=Type%3D%3D%22RECEIVE%22%7C%7CType%3D%3D%22SPEND%22",
+              "protocol": "https",
+              "host": [
+                "api",
+                "xero",
+                "com"
+              ],
+              "path": [
+                "api.xro",
+                "2.0",
+                "BankTransactions"
+              ],
+              "query": [
+                {
+                  "key": "where",
+                  "value": "Type%3D%3D%22RECEIVE%22%7C%7CType%3D%3D%22SPEND%22"
+                }
+              ]
+            },
+            "description": "Generated from cURL: curl -X GET \"https://api.xero.com/api.xro/2.0/BankTransactions?where=Type%3D%3D%22RECEIVE%22%7C%7CType%3D%3D%22SPEND%22\" -H \"Authorization: Bearer {{access_token}}\" -H \"xero-tenant-id: {{tenant_id}}\" -H \"Accept: application/json\" -H \"If-Modified-Since: {{modified_since}}\""
+          },
+          "response": [
+            {
+              "name": "Get Bank Transactions",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}"
+                  },
+                  {
+                    "key": "xero-tenant-id",
+                    "value": "{{tenant_id}}"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "If-Modified-Since",
+                    "value": "{{modified_since}}",
+                    "disabled": true
+                  }
+                ],
+                "url": {
+                  "raw": "https://api.xero.com/api.xro/2.0/BankTransactions?where=Type%3D%3D%22RECEIVE%22%7C%7CType%3D%3D%22SPEND%22",
+                  "protocol": "https",
+                  "host": [
+                    "api",
+                    "xero",
+                    "com"
+                  ],
+                  "path": [
+                    "api.xro",
+                    "2.0",
+                    "BankTransactions"
+                  ],
+                  "query": [
+                    {
+                      "key": "where",
+                      "value": "Type%3D%3D%22RECEIVE%22%7C%7CType%3D%3D%22SPEND%22"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": ":status",
+                  "value": 200
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "content-length",
+                  "value": "18669"
+                },
+                {
+                  "key": "xero-correlation-id",
+                  "value": "4782de74-a337-4e16-8c85-4fc6306d06ce"
+                },
+                {
+                  "key": "x-appminlimit-remaining",
+                  "value": "9998"
+                },
+                {
+                  "key": "x-minlimit-remaining",
+                  "value": "58"
+                },
+                {
+                  "key": "x-daylimit-remaining",
+                  "value": "4998"
+                },
+                {
+                  "key": "xero-tenant-id",
+                  "value": "9e1d3371-fcd4-4bf6-8315-efc9051448cc"
+                },
+                {
+                  "key": "server",
+                  "value": "tpzgw-c"
+                },
+                {
+                  "key": "expires",
+                  "value": "Tue, 31 Mar 2026 12:49:39 GMT"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "max-age=0, no-cache, no-store"
+                },
+                {
+                  "key": "pragma",
+                  "value": "no-cache"
+                },
+                {
+                  "key": "date",
+                  "value": "Tue, 31 Mar 2026 12:49:39 GMT"
+                },
+                {
+                  "key": "x-client-tls-ver",
+                  "value": "tls1.3"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"Id\": \"4782de74-a337-4e16-8c85-4fc6306d06ce\",\n    \"Status\": \"OK\",\n    \"ProviderName\": \"ComplyLet Pro Webapp\",\n    \"DateTimeUTC\": \"/Date(1774961379284)/\",\n    \"BankTransactions\": [\n        {\n            \"BankTransactionID\": \"565cce24-9808-42b5-b3a8-b63cabf61896\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"Test Rent\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"fadf2d21-1a64-43be-ae45-1a2b2860cd8e\",\n                \"Name\": \"Test Tenant\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-05T00:00:00\",\n            \"Date\": \"/Date(1772668800000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 10,\n            \"TotalTax\": 0,\n            \"Total\": 10,\n            \"UpdatedDateUTC\": \"/Date(1772719024317+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"5f7c6af1-6b9b-4dbb-861c-8ce128130b18\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"SPEND\",\n            \"Reference\": \"Insurance Expense Test\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"6be21f83-ca8e-4e0d-af40-acd2e729ad9f\",\n                \"Name\": \"Insurance Company\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-05T00:00:00\",\n            \"Date\": \"/Date(1772668800000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 50,\n            \"TotalTax\": 0,\n            \"Total\": 50,\n            \"UpdatedDateUTC\": \"/Date(1772719620943+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"e33cbdad-a420-4757-89b7-d4bcec6b5061\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"Test Rent\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"fadf2d21-1a64-43be-ae45-1a2b2860cd8e\",\n                \"Name\": \"Test Tenant\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-05T00:00:00\",\n            \"Date\": \"/Date(1772668800000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 10,\n            \"TotalTax\": 0,\n            \"Total\": 10,\n            \"UpdatedDateUTC\": \"/Date(1772802452367+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"a7ec1108-2568-4058-a730-07ada8bb25be\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"Test Rent\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"c181056e-a7b7-409d-b044-fb08ec314660\",\n                \"ContactNumber\": \"+441470672172\",\n                \"Name\": \"Murkherje 2\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-06T00:00:00\",\n            \"Date\": \"/Date(1772755200000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 200,\n            \"TotalTax\": 0,\n            \"Total\": 200,\n            \"UpdatedDateUTC\": \"/Date(1772806467240+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"f7837c62-3e7d-4014-a62c-1bad3b2d4a8d\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"Test Rent\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-06T00:00:00\",\n            \"Date\": \"/Date(1772755200000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 200,\n            \"TotalTax\": 0,\n            \"Total\": 200,\n            \"UpdatedDateUTC\": \"/Date(1772806675477+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"e25891b0-31fe-47ba-aac9-ec7d9d96bb60\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"SPEND\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 833.33,\n            \"TotalTax\": 166.67,\n            \"Total\": 1000,\n            \"UpdatedDateUTC\": \"/Date(1772876789270+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"53296b9f-15b1-4c29-ac82-f1cdc89f66a0\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"SPEND\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 833.33,\n            \"TotalTax\": 166.67,\n            \"Total\": 1000,\n            \"UpdatedDateUTC\": \"/Date(1772876857620+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"48aa969a-a575-4d7b-bf51-9c5466ecb969\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"SPEND\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 833.33,\n            \"TotalTax\": 166.67,\n            \"Total\": 1000,\n            \"UpdatedDateUTC\": \"/Date(1772876859897+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"ee257fb0-86fe-4cf3-bf07-e6c220137307\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"Test Rent\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 200,\n            \"TotalTax\": 0,\n            \"Total\": 200,\n            \"UpdatedDateUTC\": \"/Date(1772879966700+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"ec846476-c371-4f5a-bcb7-6f79e3b8ee2a\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"Test Rent\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 200,\n            \"TotalTax\": 0,\n            \"Total\": 200,\n            \"UpdatedDateUTC\": \"/Date(1772880095367+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"bd657472-d6cf-4854-bbc0-f1fdd351d97f\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"Test Rent\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"20b6d99b-e614-42fa-ae7d-248d1756d934\",\n                \"ContactNumber\": \"+442072194272\",\n                \"Name\": \"George-29 Two Story Suburban House\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 1000,\n            \"TotalTax\": 0,\n            \"Total\": 1000,\n            \"UpdatedDateUTC\": \"/Date(1772881110403+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"ea2fc9d6-5692-408c-8b36-3e4b703d1ac5\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"SPEND\",\n            \"Reference\": \"Test Rent\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"20b6d99b-e614-42fa-ae7d-248d1756d934\",\n                \"ContactNumber\": \"+442072194272\",\n                \"Name\": \"George-29 Two Story Suburban House\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 1200,\n            \"TotalTax\": 0,\n            \"Total\": 1200,\n            \"UpdatedDateUTC\": \"/Date(1772881395450+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"448392db-112e-42f3-b56c-f9ce637d79e6\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"SPEND\",\n            \"Reference\": \"20b6d99b-e614-42fa-ae7d-248d1756d934\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"20b6d99b-e614-42fa-ae7d-248d1756d934\",\n                \"ContactNumber\": \"+442072194272\",\n                \"Name\": \"George-29 Two Story Suburban House\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 300,\n            \"TotalTax\": 0,\n            \"Total\": 300,\n            \"UpdatedDateUTC\": \"/Date(1772881515793+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"a21c86d4-2ef7-4fcc-8e6a-4ad0e72db36c\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 200,\n            \"TotalTax\": 0,\n            \"Total\": 200,\n            \"UpdatedDateUTC\": \"/Date(1772882636840+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"666e0d8e-2618-4b71-b7dd-4132b92d114f\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 200,\n            \"TotalTax\": 0,\n            \"Total\": 200,\n            \"UpdatedDateUTC\": \"/Date(1772882951963+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"371e1a66-995d-4cae-8d1c-a5ced9c70b5b\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 200,\n            \"TotalTax\": 0,\n            \"Total\": 200,\n            \"UpdatedDateUTC\": \"/Date(1772882998927+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"88b06ddc-d2a4-40cd-b701-638085656729\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"3be4fc7d-471b-4e0b-9d76-3c10c1aee5c4\",\n                \"ContactNumber\": \"+25470672172\",\n                \"Name\": \"George\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-07T00:00:00\",\n            \"Date\": \"/Date(1772841600000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 200,\n            \"TotalTax\": 0,\n            \"Total\": 200,\n            \"UpdatedDateUTC\": \"/Date(1772883026477+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        },\n        {\n            \"BankTransactionID\": \"67e26a94-cdcc-4a60-ab2f-9205f90bfa76\",\n            \"BankAccount\": {\n                \"AccountID\": \"38b4e08c-c5ab-4ab7-ae32-aa81d9b9ed52\",\n                \"Code\": \"120\",\n                \"Name\": \"Barclays Business (UK)\"\n            },\n            \"Type\": \"RECEIVE\",\n            \"Reference\": \"5f686f84-f9c5-4a49-b8a1-d239011ad8e4\",\n            \"IsReconciled\": false,\n            \"HasAttachments\": false,\n            \"Contact\": {\n                \"ContactID\": \"5f686f84-f9c5-4a49-b8a1-d239011ad8e4\",\n                \"ContactNumber\": \"07971626345\",\n                \"Name\": \"Landlord-Modern Terraced House\",\n                \"Addresses\": [],\n                \"Phones\": [],\n                \"ContactGroups\": [],\n                \"ContactPersons\": [],\n                \"HasValidationErrors\": false\n            },\n            \"DateString\": \"2026-03-09T00:00:00\",\n            \"Date\": \"/Date(1773014400000+0000)/\",\n            \"Status\": \"AUTHORISED\",\n            \"LineAmountTypes\": \"Inclusive\",\n            \"LineItems\": [],\n            \"SubTotal\": 2000,\n            \"TotalTax\": 0,\n            \"Total\": 2000,\n            \"UpdatedDateUTC\": \"/Date(1773062811150+0000)/\",\n            \"CurrencyCode\": \"GBP\"\n        }\n    ]\n}"
+            }
+          ]
+        }
+      ],
+      "description": "## Accounting\n\nThis folder covers Xero Accounting API endpoints related to bank accounts and transactions. Use the requests here to retrieve bank account details and monitor money in/out transactions via the Xero API.\n\n**Authentication:** All requests require a valid Bearer token (`{{access_token}}`) and a Xero tenant ID (`{{tenant_id}}`).\n\n### Requests\n\n| Request | Method | Description |\n|---|---|---|\n| **Get Bank Accounts** | `GET` | Fetches all bank-type accounts from the Xero Accounting API |\n| **Get Bank Transactions** | `GET` | Fetches bank transactions of type `RECEIVE` and `SPEND` from the Xero Accounting API |"
+    },
+    {
+      "name": "4. Token Management",
+      "item": [
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "disabled": false
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "type": "text",
+                  "key": "grant_type",
+                  "value": "refresh_token"
+                },
+                {
+                  "type": "text",
+                  "key": "refresh_token",
+                  "value": "{{refresh_token}}"
+                },
+                {
+                  "type": "text",
+                  "key": "client_id",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "type": "text",
+                  "key": "client_secret",
+                  "value": "{{client_secret}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "https://identity.xero.com/connect/token",
+              "protocol": "https",
+              "host": [
+                "identity",
+                "xero",
+                "com"
+              ],
+              "path": [
+                "connect",
+                "token"
+              ]
+            },
+            "description": "Generated from cURL: curl -X POST \"https://identity.xero.com/connect/token\" -H \"Content-Type: application/x-www-form-urlencoded\" -H \"Accept: application/json\" --data-urlencode \"grant_type=refresh_token\" --data-urlencode \"refresh_token={{refresh_token}}\" --data-urlencode \"client_id={{client_id}}\" --data-urlencode \"client_secret={{client_secret}}\""
+          },
+          "response": [
+            {
+              "name": "Refresh Token",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-www-form-urlencoded",
+                    "disabled": false
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "disabled": false
+                  }
+                ],
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [
+                    {
+                      "type": "text",
+                      "key": "grant_type",
+                      "value": "refresh_token"
+                    },
+                    {
+                      "type": "text",
+                      "key": "refresh_token",
+                      "value": "{{refresh_token}}"
+                    },
+                    {
+                      "type": "text",
+                      "key": "client_id",
+                      "value": "{{client_id}}"
+                    },
+                    {
+                      "type": "text",
+                      "key": "client_secret",
+                      "value": "{{client_secret}}"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "https://identity.xero.com/connect/token",
+                  "protocol": "https",
+                  "host": [
+                    "identity",
+                    "xero",
+                    "com"
+                  ],
+                  "path": [
+                    "connect",
+                    "token"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": ":status",
+                  "value": 200
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "xero-origin-id",
+                  "value": "IdentityServer.Web"
+                },
+                {
+                  "key": "xero-causation-id",
+                  "value": "c155ae42cffb41af82ad03803801cfa0"
+                },
+                {
+                  "key": "xero-message-id",
+                  "value": "bb02edf4afd4437490588acac1b6e786"
+                },
+                {
+                  "key": "xero-activity-id",
+                  "value": "0a027617a899416da2fdba4edf866fec"
+                },
+                {
+                  "key": "xero-correlation-id",
+                  "value": "47df84ccefe64ec49c4a16dfa9cb2f68"
+                },
+                {
+                  "key": "server",
+                  "value": "tpzgw-c-s"
+                },
+                {
+                  "key": "content-length",
+                  "value": "2902"
+                },
+                {
+                  "key": "expires",
+                  "value": "Tue, 31 Mar 2026 13:06:55 GMT"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "max-age=0, no-cache, no-store"
+                },
+                {
+                  "key": "pragma",
+                  "value": "no-cache"
+                },
+                {
+                  "key": "date",
+                  "value": "Tue, 31 Mar 2026 13:06:55 GMT"
+                },
+                {
+                  "key": "server-timing",
+                  "value": "cdn-cache; desc=MISS, edge; dur=87, origin; dur=40, ak_p; desc=\"1774962414877_34653942_884287289_12736_11317_8_13_15\";dur=1"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"id_token\": \"eyJhbGciOiJSUzI1NiIsImtpZCI6IjFDQUY4RTY2NzcyRDZEQzAyOEQ2NzI2RkQwMjYxNTgxNTcwRUZDMTkiLCJ0eXAiOiJKV1QiLCJ4NXQiOiJISy1PWm5jdGJjQW8xbkp2MENZVmdWY09fQmsifQ.eyJuYmYiOjE3NzQ5NjI0MTQsImV4cCI6MTc3NDk2MjcxNCwiaXNzIjoiaHR0cHM6Ly9pZGVudGl0eS54ZXJvLmNvbSIsImF1ZCI6IjcxMTU4ODY5NTUyNTQ4NDJBQUREMzZENjMzMTlCN0U5IiwiaWF0IjoxNzc0OTYyNDE0LCJhdF9oYXNoIjoiQ3BrUDF3Zks0bzRrbUhVUlhNY3BPQSIsInN1YiI6ImEyZWQxN2M3YjQyYTUwNmM5YzY0OGU4NDFjNTE4MDNiIiwiYXV0aF90aW1lIjoxNzc0OTU1NTY2LCJ4ZXJvX3VzZXJpZCI6ImVhMjQxZDM4LTVkNzQtNDQxNy04ODU5LTVlY2NjNmMzZDNjYiIsImdsb2JhbF9zZXNzaW9uX2lkIjoiMDBlMzU2YjZiNGRiNDE5ZjhhMWI4NTFiZWNhMzk4YjkiLCJzaWQiOiIwMGUzNTZiNmI0ZGI0MTlmOGExYjg1MWJlY2EzOThiOSIsInByZWZlcnJlZF91c2VybmFtZSI6Im11a2hlcmplZUBob3RtYWlsLmNvLnVrIiwiZW1haWwiOiJtdWtoZXJqZWVAaG90bWFpbC5jby51ayIsImdpdmVuX25hbWUiOiJTaGF5b24iLCJmYW1pbHlfbmFtZSI6Ik11a2hlcmplZSIsIm5hbWUiOiJTaGF5b24gTXVraGVyamVlIiwiYW1yIjpbInB3ZCJdfQ.lyWZM3YS5qwe0vqaB9HhMZNNSW7GEwKjQdfkGtUfYqQU07dN5Jt3mjHphE_MB3d3R8egQgjSHarFAUP-6wf-U9ssBw9C0dWeRSXWjwhCkRt6tSe6SyEvfsK1PIsAAVa_dGZGH21oVVpvH0W3bKlnaEl27Fb4VnvMg16bJ0GGBQq6ICLXR_0g1_IjWx0nBCvuQPi5pthDOSMBJbzhvM9i2X2tIgOJmTqcMGMddDknimzH3dpswdCDjiTBjSCBNbaqT9JZhtFZ43Xzp3JTSpnTfKTInDWhgJcSJTvYZUENvQLvfzlk5ZdNKDnGP_g3aaGbkAOtv9_Kkje7T9JwTQnfmg\",\n    \"access_token\": \"eyJhbGciOiJSUzI1NiIsImtpZCI6IjFDQUY4RTY2NzcyRDZEQzAyOEQ2NzI2RkQwMjYxNTgxNTcwRUZDMTkiLCJ0eXAiOiJKV1QiLCJ4NXQiOiJISy1PWm5jdGJjQW8xbkp2MENZVmdWY09fQmsifQ.eyJuYmYiOjE3NzQ5NjI0MTQsImV4cCI6MTc3NDk2NDIxNCwiaXNzIjoiaHR0cHM6Ly9pZGVudGl0eS54ZXJvLmNvbSIsImF1ZCI6Imh0dHBzOi8vaWRlbnRpdHkueGVyby5jb20vcmVzb3VyY2VzIiwiY2xpZW50X2lkIjoiNzExNTg4Njk1NTI1NDg0MkFBREQzNkQ2MzMxOUI3RTkiLCJzdWIiOiJhMmVkMTdjN2I0MmE1MDZjOWM2NDhlODQxYzUxODAzYiIsImF1dGhfdGltZSI6MTc3NDk1NTU2NiwieGVyb191c2VyaWQiOiJlYTI0MWQzOC01ZDc0LTQ0MTctODg1OS01ZWNjYzZjM2QzY2IiLCJnbG9iYWxfc2Vzc2lvbl9pZCI6IjAwZTM1NmI2YjRkYjQxOWY4YTFiODUxYmVjYTM5OGI5Iiwic2lkIjoiMDBlMzU2YjZiNGRiNDE5ZjhhMWI4NTFiZWNhMzk4YjkiLCJhdXRoZW50aWNhdGlvbl9ldmVudF9pZCI6IjBiMzgyY2Q1LWMxYjEtNDgwNy1iZDcyLWQ0MTU2NjU3MGM1YyIsImp0aSI6IjM0QzkzQjNGOTRGQUVDRTY5NjU5MjQ3QzQ0NzRERUM0Iiwic2NvcGUiOlsiZW1haWwiLCJwcm9maWxlIiwib3BlbmlkIiwiYWNjb3VudGluZy50cmFuc2FjdGlvbnMiLCJhY2NvdW50aW5nLmNvbnRhY3RzIiwiYWNjb3VudGluZy5zZXR0aW5ncyIsImFjY291bnRpbmcuc2V0dGluZ3MucmVhZCIsImFjY291bnRpbmcucmVwb3J0cy5yZWFkIiwib2ZmbGluZV9hY2Nlc3MiXSwiYW1yIjpbInB3ZCJdfQ.v3D8KdAtkwooP5D8qDjlCwFLA_OsSgDYATcAd4jtne6OB98V7vUGuyqq4JjIRxUB5CRDdqP_zgHuIOV9heNWQCc78WDL8fUSa_ZdnK-TkrEi_ZdfXl47alnAkKJ482mDAISvhYp-aGtCjDv3cU5wpnGRn_fmfe1Vgx4Bs5rty2qkivxfTzHA7Ned701FMWKkjUox0SQThRfiBV6eJ0PqggmOwKEWWiFaPhKOBzKtiXBGS4gNhCdlAmR6Ly584oMcpk6MZHUB0RbDdXPZgXoDvjkpLiTMvj9N62fBRYokTcRrW3FViuIWCc7dOjvT54j8YTSdu3aam1J1Ms8i2TfWrg\",\n    \"expires_in\": 1800,\n    \"token_type\": \"Bearer\",\n    \"refresh_token\": \"G1lAGKaeeWbbaEz_DNyaJ2kngrH-QKvcbl_KDT_YMg0\",\n    \"scope\": \"email profile openid accounting.transactions accounting.contacts accounting.settings accounting.settings.read accounting.reports.read offline_access\"\n}"
+            }
+          ]
+        }
+      ],
+      "description": "## Token Management\n\nThis folder handles OAuth 2.0 token lifecycle management for the Xero API. Use the requests here to maintain a valid access token during your session by exchanging credentials with Xero's identity server.\n\n### Refresh Token\n\nExchanges an existing refresh token for a new access token by posting client credentials to the Xero identity endpoint. This is required when the current access token has expired.\n\n**Endpoint:** `POST https://identity.xero.com/connect/token`\n\n**Body Parameters (form-urlencoded):**\n\n| Parameter | Value | Description |\n|---|---|---|\n| `grant_type` | `refresh_token` | Specifies the OAuth 2.0 grant type |\n| `refresh_token` | `{{refresh_token}}` | The refresh token obtained during initial authorization |\n| `client_id` | `{{client_id}}` | Your Xero application's client ID |\n| `client_secret` | `{{client_secret}}` | Your Xero application's client secret |\n\nOn success, Xero returns a new `access_token` and `refresh_token`. Update your environment variables accordingly to continue making authenticated API requests."
+    }
+  ],
+  "auth": {
+    "type": "oauth2",
+    "oauth2": [
+      {
+        "key": "tokenType",
+        "value": "Bearer",
+        "type": "string"
+      },
+      {
+        "key": "accessToken",
+        "value": "{{access_token}}",
+        "type": "string"
+      },
+      {
+        "key": "scope",
+        "value": "openid profile email offline_access accounting.transactions accounting.settings",
+        "type": "string"
+      },
+      {
+        "key": "clientSecret",
+        "value": "{{client_secret}}",
+        "type": "string"
+      },
+      {
+        "key": "clientId",
+        "value": "{{client_id}}",
+        "type": "string"
+      },
+      {
+        "key": "accessTokenUrl",
+        "value": "https://identity.xero.com/connect/token",
+        "type": "string"
+      },
+      {
+        "key": "authUrl",
+        "value": "https://login.xero.com/identity/connect/authorize",
+        "type": "string"
+      },
+      {
+        "key": "tokenName",
+        "value": "Token",
+        "type": "string"
+      },
+      {
+        "key": "addTokenTo",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "requests": {},
+        "exec": [
+          "const jsonData = pm.response.json();",
+          "if (jsonData.access_token) {",
+          "    pm.collectionVariables.set(\"access_token\", jsonData.access_token);",
+          "}",
+          "if (jsonData.refresh_token) {",
+          "    pm.collectionVariables.set(\"refresh_token\", jsonData.refresh_token);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "client_id",
+      "value": ""
+    },
+    {
+      "key": "client_secret",
+      "value": ""
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "tenant_id",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "value": ""
+    }
+  ]
+}

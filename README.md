@@ -1,6 +1,8 @@
-# HMRC MTD Property Landlord — Backend API
+# HMRC MTD & Xero — Property Landlord Backend API
 
-A FastAPI backend that integrates HMRC Making Tax Digital (Income Tax) APIs for a property landlord application built with Adalo.
+A FastAPI backend for property landlords built with Adalo. Integrates:
+- **HMRC Making Tax Digital** (Income Tax Self Assessment) — obligations, periodic submissions
+- **Xero Accounting** — bank accounts and bank transactions
 
 ---
 
@@ -9,16 +11,18 @@ A FastAPI backend that integrates HMRC Making Tax Digital (Income Tax) APIs for 
 ```
 Adalo Frontend
     │
-    │  Simple REST calls (X-Session-ID header)
+    │  Simple REST calls (X-Session-ID / X-Xero-Session-ID header)
     ▼
 FastAPI Backend  ◄──► SQLite (tokens)
-    │
-    │  OAuth 2.0 + Fraud Prevention Headers
-    ▼
-HMRC MTD API
+    │              │
+    │  HMRC MTD    │  Xero Accounting
+    │  OAuth 2.0   │  OAuth 2.0
+    │  Fraud Hdrs  │  Token refresh
+    ▼              ▼
+HMRC API       Xero API
 ```
 
-All OAuth 2.0 complexity and HMRC Fraud Prevention headers are handled entirely in this backend — Adalo only ever sees simple REST endpoints.
+All OAuth 2.0 complexity lives here — Adalo only calls simple REST endpoints.
 
 ---
 
@@ -26,11 +30,15 @@ All OAuth 2.0 complexity and HMRC Fraud Prevention headers are handled entirely 
 
 ```
 .
-├── main.py           # FastAPI app, public auth routes
-├── auth.py           # OAuth 2.0 flow + token refresh
+├── main.py           # FastAPI app, public auth routes, startup
+├── auth.py           # HMRC OAuth 2.0 flow + token refresh
 ├── hmrc_client.py    # HMRC API client + fraud header generation
-├── routes.py         # Business Details, Obligations, Submissions
-├── database.py       # SQLite token store
+├── routes.py         # HMRC: Business Details, Obligations, Submissions
+├── database.py       # SQLite: HMRC token store
+├── xero_auth.py      # Xero OAuth 2.0 flow + token refresh
+├── xero_client.py    # Xero Accounting API client
+├── xero_routes.py    # Xero: bank accounts, transactions, sync
+├── xero_database.py  # SQLite: Xero token + session store
 ├── requirements.txt
 ├── .env.example      # Copy to .env and fill in credentials
 ├── vercel.json       # Vercel deployment config
@@ -234,6 +242,111 @@ X-Session-ID: <your-session-id>
    → Call POST /submit-periodic with YTD totals
    → Store returned submission_id for future amendments
 ```
+
+---
+
+## Xero Integration
+
+### Overview
+
+Xero is used to pull in bank transactions (income and expenses) from the landlord's connected bank accounts. This complements the HMRC submission flow — you can sync Xero transactions, then submit the totals to HMRC.
+
+### Required Environment Variables
+
+| Variable | Description |
+|---|---|
+| `XERO_CLIENT_ID` | Your Xero app's Client ID |
+| `XERO_CLIENT_SECRET` | Your Xero app's Client Secret |
+| `XERO_REDIRECT_URI` | Callback URL registered in Xero Developer Portal |
+
+Register your app at [https://developer.xero.com/myapps](https://developer.xero.com/myapps):
+- App type: **Web App**
+- Grant type: **Authorization Code**
+- Enable: **OpenID Connect**
+- Add redirect URI: `https://hmrc-mtd-ap-is.vercel.app/xero/callback`
+
+### Xero OAuth Flow (Adalo)
+
+The same state-polling pattern used for HMRC:
+
+```
+1. GET /xero/login-url
+   Response: { "auth_url": "https://login.xero.com/...", "state": "uuid" }
+   → Store `state` in Adalo hidden variable
+   → Open `auth_url` in device browser
+
+2. User logs in to Xero (in browser)
+   → Xero redirects to /xero/callback automatically
+   → Backend exchanges code for tokens + fetches tenant_id
+
+3. Poll GET /xero/session?state=<state>  (every 3–5 seconds)
+   → 202: { "ready": false }  — still waiting
+   → 200: { "ready": true, "session_id": "...", "tenant_id": "..." }
+   → Store session_id and tenant_id in Adalo user profile
+
+4. All subsequent Xero calls require header:
+   X-Xero-Session-ID: <session_id>
+```
+
+### Xero Endpoints
+
+| Endpoint | Description |
+|---|---|
+| `GET /xero/login-url` | Returns Xero OAuth URL + state for Adalo to open |
+| `GET /xero/callback` | OAuth callback — exchanges code, stores tokens |
+| `GET /xero/session?state=` | Adalo polls this to retrieve session_id |
+| `GET /xero/bank-accounts` | Lists BANK-type accounts from Xero |
+| `GET /xero/transactions` | Fetches RECEIVE/SPEND bank transactions |
+| `POST /xero/sync` | Fetches + transforms transactions into app format |
+
+### Xero Bank Accounts Response
+
+```json
+{
+  "bank_accounts": [
+    {
+      "id": "38b4e08c-...",
+      "name": "Barclays Business (UK)",
+      "bank_number": "20346033730956",
+      "currency": "GBP"
+    }
+  ]
+}
+```
+
+### Xero Transactions Response
+
+```json
+{
+  "transactions": [
+    {
+      "id": "565cce24-...",
+      "amount": 1000.00,
+      "type": "income",
+      "date": "2026-03-07",
+      "description": "Test Tenant",
+      "reference": "Test Rent",
+      "currency": "GBP"
+    }
+  ]
+}
+```
+
+**Type mapping:**
+- `RECEIVE` → `"income"` (e.g. rent received)
+- `SPEND` → `"expense"` (e.g. mortgage payment, repairs)
+
+### Optional Query Parameters for `/xero/transactions`
+
+| Param | Example | Description |
+|---|---|---|
+| `fromDate` | `2026-01-01` | Filter transactions from this date |
+| `toDate` | `2026-03-31` | Filter transactions up to this date |
+| `accountId` | `38b4e08c-...` | Filter by specific bank account |
+
+### Token Refresh
+
+Xero access tokens expire after 30 minutes. The `get_valid_xero_token()` function in `xero_auth.py` automatically refreshes the token using the stored `refresh_token` before each API call — no user action required.
 
 ---
 
