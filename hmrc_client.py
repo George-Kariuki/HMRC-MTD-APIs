@@ -314,6 +314,46 @@ class HMRCClient:
         _raise_for_hmrc_error(resp)
         return resp.json()
 
+    async def retrieve_business(self, nino: str, business_id: str) -> dict:
+        """
+        GET /individuals/business/details/{nino}/{businessId}   (Accept v2.0)
+
+        Returns the full details of a single income source identified by businessId.
+        Useful for confirming accountingType, commencementDate and other metadata
+        for a known business before submitting.
+
+        Postman: Business Details API → Retrieve Business Details
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/details/{nino}/{business_id}",
+                headers=self._headers("2.0"),
+            )
+        _raise_for_hmrc_error(resp)
+        return resp.json()
+
+    async def retrieve_periods_of_account(
+        self, nino: str, business_id: str, tax_year: str
+    ) -> dict:
+        """
+        GET /individuals/business/details/{nino}/{businessId}/{taxYear}/periods-of-account
+        (Accept v2.0)
+
+        Returns the accounting periods available for submissions within the given
+        tax year.  Use these to determine valid fromDate / toDate windows before
+        creating cumulative period submissions.
+
+        Postman: Business Details API → Retrieve Periods of Account
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/details/{nino}"
+                f"/{business_id}/{tax_year}/periods-of-account",
+                headers=self._headers("2.0"),
+            )
+        _raise_for_hmrc_error(resp)
+        return resp.json()
+
     # ── Obligations API ──────────────────────────────────────────────────────────
 
     async def get_obligations(
@@ -504,6 +544,132 @@ class HMRCClient:
                 f"{self.base}/individuals/business/property/uk"
                 f"/{nino}/{business_id}/annual/{tax_year}",
                 headers=self._headers("6.0"),
+            )
+        _raise_for_hmrc_error(resp)
+        return resp.json()
+
+    # ── UK Property Cumulative Period Summary ─────────────────────────────────────
+
+    async def create_or_amend_uk_property_cumulative(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+    ) -> dict:
+        """
+        PUT /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}
+        (Accept v6.0, Content-Type application/json)
+
+        Creates or amends a UK property cumulative period summary (income and
+        expenses for the full year-to-date within the given tax year).
+
+        The body should follow the HMRC ukFhlProperty / ukProperty schema with
+        income and expenses nested inside.  Pass the raw HMRC body shape —
+        the route handler validates and forwards it unchanged.
+
+        Postman: Property Business → Income and Expenses Period Summaries →
+                 Create or Amend a UK Property Cumulative Period Summary
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/property/uk"
+                f"/{nino}/{business_id}/cumulative/{tax_year}",
+                headers=self._headers("6.0", {"Content-Type": "application/json"}),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        # HMRC returns 204 No Content on success for this endpoint
+        if resp.status_code == 204:
+            return {"message": "Cumulative period summary created/amended successfully."}
+        return resp.json()
+
+    async def retrieve_uk_property_cumulative(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+    ) -> dict:
+        """
+        GET /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}
+        (Accept v6.0)
+
+        Retrieves the current cumulative period summary (income and expenses
+        year-to-date) for a UK property business.
+
+        Postman: Property Business → Income and Expenses Period Summaries →
+                 Retrieve a UK Property Cumulative Period Summary
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/uk"
+                f"/{nino}/{business_id}/cumulative/{tax_year}",
+                headers=self._headers("6.0"),
+            )
+        _raise_for_hmrc_error(resp)
+        return resp.json()
+
+    # ── Self-Employment Cumulative Period Summary ──────────────────────────────────
+
+    async def create_or_amend_self_employment_cumulative(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+    ) -> dict:
+        """
+        PUT /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear}
+        (Accept v5.0, Content-Type application/json)
+
+        Creates or amends a self-employment cumulative period summary.
+
+        The body must contain:
+          periodDates:    { periodStartDate, periodEndDate }
+          periodIncome:   { turnover, other }
+          periodExpenses: { costOfGoods, paymentsToSubcontractors, wagesAndStaffCosts,
+                            carVanTravelExpenses, premisesRunningCosts, maintenanceCosts,
+                            adminCosts, businessEntertainmentCosts, advertisingCosts,
+                            interestOnBankOtherLoans }
+
+        All amounts are cumulative year-to-date (not quarter-only).
+
+        Postman: Self Employment Business (MTD) → Self-Employment Cumulative Period Summary →
+                 Create or Amend a Self-Employment Cumulative Period Summary
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/self-employment"
+                f"/{nino}/{business_id}/cumulative/{tax_year}",
+                headers=self._headers("5.0", {"Content-Type": "application/json"}),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Self-employment cumulative period summary created/amended successfully."}
+        return resp.json()
+
+    async def retrieve_self_employment_cumulative(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+    ) -> dict:
+        """
+        GET /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear}
+        (Accept v5.0)
+
+        Retrieves the current self-employment cumulative period summary for the
+        given tax year.
+
+        Postman: Self Employment Business (MTD) → Self-Employment Cumulative Period Summary →
+                 Retrieve a Self-Employment Cumulative Period Summary
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/self-employment"
+                f"/{nino}/{business_id}/cumulative/{tax_year}",
+                headers=self._headers("5.0"),
             )
         _raise_for_hmrc_error(resp)
         return resp.json()

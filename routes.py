@@ -398,7 +398,63 @@ async def submit_periodic(
     }
 
 
+# ── Business Details — retrieve single business + periods of account ───────────────
+
+@router.get("/business-details/{business_id}", tags=["HMRC"])
+async def retrieve_business(
+    business_id: str,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+):
+    """
+    Retrieve the full details of a single income source by its businessId.
+
+    Use this after GET /business-details (list all) to inspect a specific business:
+    accountingType, commencementDate, latencyDetails, etc.
+
+    HMRC endpoint:  GET /individuals/business/details/{nino}/{businessId}  (v2.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.retrieve_business(nino, business_id)
+    return {"nino": nino, "businessId": business_id, **data}
+
+
+@router.get("/business-details/{business_id}/periods-of-account", tags=["HMRC"])
+async def periods_of_account(
+    business_id: str,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25'",
+    ),
+):
+    """
+    Retrieve the accounting periods available for a business in a given tax year.
+
+    Use the period start and end dates returned here as the valid fromDate / toDate
+    boundaries when calling PUT /property-cumulative or PUT /self-employment-cumulative.
+
+    HMRC endpoint:
+        GET /individuals/business/details/{nino}/{businessId}/{taxYear}/periods-of-account  (v2.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.retrieve_periods_of_account(nino, business_id, tax_year)
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
 # ── Annual Submission ─────────────────────────────────────────────────────────────
+
 
 class AnnualSubmissionRequest(BaseModel):
     """
@@ -450,3 +506,225 @@ async def validate_fraud_headers(
     session_id = _require_session(x_session_id)
     client = await _build_client(request, session_id)
     return await client.validate_fraud_headers()
+
+
+# ── UK Property Cumulative Period Summary ─────────────────────────────────────────
+
+
+class UKPropertyCumulativeRequest(BaseModel):
+    """
+    Payload for creating or amending a UK property cumulative period summary.
+
+    Send cumulative year-to-date figures in the `body` field, shaped as HMRC expects:
+    {
+      "fromDate": "2025-04-06",
+      "toDate":   "2025-07-05",
+      "ukNonFhlProperty": {
+        "income": {
+          "periodAmount": 3000.00,
+          "premiumsOfLeaseGrant": 0,
+          "reversePremiums": 0,
+          "otherIncome": 0
+        },
+        "expenses": {
+          "premisesRunningCosts": 150.00,
+          "repairsAndMaintenance": 100.00,
+          "financialCosts": 500.00,
+          "professionalFees": 75.00,
+          "costOfServices": 0,
+          "other": 0,
+          "residentialFinancialCost": 0,
+          "travelCosts": 0
+        }
+      }
+    }
+
+    Or use `ukFhlProperty` for Furnished Holiday Lettings.
+    """
+    income_source_id: str = Field(..., description="businessId from GET /business-details")
+    tax_year: str          = Field(..., description="HMRC tax year e.g. '2024-25'")
+    body: dict             = Field(
+        ...,
+        description=(
+            "Raw HMRC cumulative period summary body. Must include fromDate, toDate "
+            "and one of: ukNonFhlProperty, ukFhlProperty."
+        ),
+    )
+
+
+@router.put("/property-cumulative", tags=["HMRC"])
+async def submit_property_cumulative(
+    payload: UKPropertyCumulativeRequest,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+):
+    """
+    Create or amend a UK property cumulative period summary (income & expenses YTD).
+
+    The `body` field must match the HMRC schema with `fromDate`, `toDate`, and
+    one of `ukNonFhlProperty` / `ukFhlProperty` containing `income` and `expenses`.
+
+    Use GET /business-details/{businessId}/periods-of-account to find valid dates.
+
+    HMRC endpoint:
+        PUT /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}  (v6.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    result = await client.create_or_amend_uk_property_cumulative(
+        nino=nino,
+        business_id=payload.income_source_id,
+        tax_year=payload.tax_year,
+        body=payload.body,
+    )
+    return {
+        "success":    True,
+        "action":     "created_or_amended",
+        "businessId": payload.income_source_id,
+        "taxYear":    payload.tax_year,
+        "result":     result,
+    }
+
+
+@router.get("/property-cumulative", tags=["HMRC"])
+async def get_property_cumulative(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(..., alias="businessId", description="businessId from GET /business-details"),
+    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2024-25'"),
+):
+    """
+    Retrieve the current cumulative period summary (income & expenses YTD) for a
+    UK property business.
+
+    HMRC endpoint:
+        GET /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}  (v6.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    data = await client.retrieve_uk_property_cumulative(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+# ── Self-Employment Cumulative Period Summary ──────────────────────────────────────
+
+
+class SelfEmploymentCumulativeRequest(BaseModel):
+    """
+    Payload for creating or amending a self-employment cumulative period summary.
+
+    The `body` field must match the HMRC schema:
+    {
+      "periodDates": {
+        "periodStartDate": "2025-04-06",
+        "periodEndDate":   "2025-07-05"
+      },
+      "periodIncome": {
+        "turnover": 12000,
+        "other":    500
+      },
+      "periodExpenses": {
+        "costOfGoods":                 8000,
+        "paymentsToSubcontractors":    500,
+        "wagesAndStaffCosts":          1000,
+        "carVanTravelExpenses":        300,
+        "premisesRunningCosts":        400,
+        "maintenanceCosts":            1200,
+        "adminCosts":                  150,
+        "businessEntertainmentCosts":  100,
+        "advertisingCosts":            250,
+        "interestOnBankOtherLoans":    100
+      }
+    }
+
+    All figures are cumulative year-to-date.
+    """
+    income_source_id: str = Field(
+        ..., description="businessId for the self-employment income source"
+    )
+    tax_year: str = Field(..., description="HMRC tax year e.g. '2024-25'")
+    body: dict    = Field(
+        ...,
+        description=(
+            "Raw HMRC self-employment cumulative body with periodDates, "
+            "periodIncome, and periodExpenses."
+        ),
+    )
+
+
+@router.put("/self-employment-cumulative", tags=["HMRC"])
+async def submit_self_employment_cumulative(
+    payload: SelfEmploymentCumulativeRequest,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+):
+    """
+    Create or amend a self-employment cumulative period summary.
+
+    Provide year-to-date income and expenses in the `body` field following the
+    HMRC schema (periodDates / periodIncome / periodExpenses).
+
+    HMRC endpoint:
+        PUT /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear}  (v5.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    result = await client.create_or_amend_self_employment_cumulative(
+        nino=nino,
+        business_id=payload.income_source_id,
+        tax_year=payload.tax_year,
+        body=payload.body,
+    )
+    return {
+        "success":    True,
+        "action":     "created_or_amended",
+        "businessId": payload.income_source_id,
+        "taxYear":    payload.tax_year,
+        "result":     result,
+    }
+
+
+@router.get("/self-employment-cumulative", tags=["HMRC"])
+async def get_self_employment_cumulative(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(..., alias="businessId", description="businessId for the self-employment business"),
+    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2024-25'"),
+):
+    """
+    Retrieve the current self-employment cumulative period summary for the given
+    business and tax year.
+
+    HMRC endpoint:
+        GET /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear}  (v5.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    data = await client.retrieve_self_employment_cumulative(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
