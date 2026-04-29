@@ -84,110 +84,146 @@ API docs available at: http://localhost:8000/docs
 
 ## API Reference
 
-### Authentication Flow
+### HMRC Authentication Flow
 
 | Step | Call | Description |
 |------|------|-------------|
-| 1 | `GET /auth/login-url` | Returns `{"auth_url": "..."}` — open this in browser |
-| 2 | User logs in at HMRC | HMRC redirects to your `/auth/callback` |
-| 3 | `GET /auth/callback?code=...&state=...` | Returns `{"session_id": "..."}` |
-| 4 | `POST /auth/set-nino` | Associate user's NINO with session |
+| 1 | `GET /auth/login-url` | Returns `{"auth_url": "...", "state": "..."}` — open `auth_url` in browser |
+| 2 | User logs in at HMRC | HMRC redirects to `/auth/callback` automatically |
+| 3 | Poll `GET /auth/session?state=<state>` | Returns `{"ready": true, "session_id": "..."}` once done |
+| 4 | `POST /auth/set-nino` | Associate user's NINO with the session |
 
-> **Adalo**: Store the `session_id` in user profile. Send it as `X-Session-ID` header on all subsequent calls.
-
----
-
-### Headers Required by Adalo
-
-Every call after login must include:
-
-```
-X-Session-ID: <session_id from /auth/callback>
-```
+> **Adalo**: Store `session_id` in user profile. Pass it as `X-Session-ID` header on every subsequent call.
 
 ---
 
-### Endpoints
+### HMRC Endpoints
 
-#### `GET /auth/login-url`
-Returns the HMRC OAuth URL for Adalo to open.
+All HMRC endpoints require header: `X-Session-ID: <session_id>`  
+NINO is stored in the session — no need to pass it separately.
 
-```json
-{ "auth_url": "https://test-api.service.hmrc.gov.uk/oauth/authorize?..." }
-```
+---
 
-#### `GET /auth/callback?code=...&state=...`
-Exchanges code for tokens. Returns:
+#### Business Details
 
+| Endpoint | Parameters | Description |
+|---|---|---|
+| `GET /business-details` | — | List all income sources (NINO from session) |
+| `GET /business-details/{businessId}` | `businessId` (path) | Retrieve a specific income source |
+| `GET /business-details/{businessId}/periods-of-account` | `businessId` (path), `taxYear` (query, required) | Get valid accounting period windows |
+
+**Sample response — `/business-details`:**
 ```json
 {
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "message": "Authentication successful. Store this session_id..."
+  "listOfBusinesses": [
+    { "businessId": "XAIS12345678901", "typeOfBusiness": "self-employment", "tradingName": "My Business" }
+  ],
+  "propertyBusinesses": [],
+  "totalBusinesses": 1
 }
 ```
 
-#### `POST /auth/set-nino`
-Associates the user's NINO with their session.
+---
 
-```json
-{ "nino": "AA123456A" }
-```
+#### Obligations
 
-#### `GET /business-details`
-Returns all property income sources for the user.
+| Endpoint | Parameters | Description |
+|---|---|---|
+| `GET /obligations` | `typeOfBusiness`, `businessId`, `fromDate`, `toDate`, `status` (all optional query) | Retrieve income & expenditure obligations |
 
-```json
-{
-  "nino": "AA123456A",
-  "propertyBusinesses": [
-    {
-      "businessId": "XAIS12345678910",
-      "typeOfBusiness": "uk-property",
-      "tradingName": null,
-      "commencementDate": "2020-01-01"
-    }
-  ]
-}
-```
+`status` accepts `open` or `fulfilled` — omit to get both.
 
-#### `GET /obligations?status=Open`
-Returns open (unfiled) obligation periods. The `periodStartDate` and `periodEndDate` **must** be used as `start_date` and `end_date` when submitting.
+---
 
-```json
-{
-  "obligations": [
-    {
-      "businessId": "XAIS12345678910",
-      "typeOfBusiness": "uk-property",
-      "periodStartDate": "2024-04-06",
-      "periodEndDate": "2025-01-05",
-      "dueDate": "2025-01-31",
-      "status": "Open",
-      "taxYear": "2024-25"
-    }
-  ]
-}
-```
+#### Periodic Submission (UK Property — Income & Expenses)
 
-#### `POST /submit-periodic`
-Submit cumulative year-to-date income and expenses.
+| Endpoint | Parameters | Description |
+|---|---|---|
+| `POST /submit-periodic` | body (all income/expense fields) | Create or amend a cumulative YTD periodic submission |
+| `GET /period-summary` | `businessId`, `taxYear`, `submissionId` (all query, required) | Retrieve a previously submitted period summary |
 
-```json
-{
-  "income_source_id": "XAIS12345678910",
-  "start_date": "2024-04-06",
-  "end_date": "2025-01-05",
-  "tax_year": "2024-25",
-  "rent_income": 12000.00,
-  "financial_costs": 3600.00,
-  "repairs_and_maintenance": 500.00,
-  "professional_fees": 200.00
-}
-```
+**Key body fields for `POST /submit-periodic`:**
+| Field | Type | Description |
+|---|---|---|
+| `income_source_id` | string | businessId from `/business-details` |
+| `start_date` | string | YYYY-MM-DD — must match obligation `periodStartDate` |
+| `end_date` | string | YYYY-MM-DD — must match obligation `periodEndDate` |
+| `tax_year` | string | e.g. `2024-25` (auto-derived if omitted) |
+| `property_type` | string | `ukNonFhlProperty` (default) or `ukFhlProperty` |
+| `rent_income` | float | Total rental income YTD |
+| `financial_costs` | float | Mortgage interest / financial costs YTD |
+| `repairs_and_maintenance` | float | Repairs YTD |
+| `professional_fees` | float | Legal, accounting etc. YTD |
+| `submission_id` | string | Include to amend an existing submission |
 
 > All monetary values must be **cumulative year-to-date** — not just the current quarter.
 
-To amend an existing submission, add `"submission_id": "..."` to the payload.
+---
+
+#### UK Property Cumulative Period Summary
+
+| Endpoint | Parameters | Description |
+|---|---|---|
+| `PUT /property-cumulative` | body (income/expense fields) | Create or amend cumulative income & expenses |
+| `GET /property-cumulative` | `businessId`, `taxYear` (query, required) | Retrieve current cumulative summary |
+
+**Key body fields for `PUT /property-cumulative`:**
+| Field | Type | Description |
+|---|---|---|
+| `income_source_id` | string | businessId |
+| `tax_year` | string | e.g. `2024-25` |
+| `from_date` | string | Period start YYYY-MM-DD |
+| `to_date` | string | Period end YYYY-MM-DD |
+| `property_type` | string | `ukNonFhlProperty` or `ukFhlProperty` |
+| `rent_income` | float | YTD rental income |
+| `financial_costs` | float | YTD mortgage interest / financial costs |
+| `repairs_and_maintenance` | float | YTD repairs |
+| `professional_fees` | float | YTD professional fees |
+| (+ other expense fields) | float | All default to 0 |
+
+---
+
+#### Annual Submission (Allowances & Adjustments)
+
+| Endpoint | Parameters | Description |
+|---|---|---|
+| `PUT /submit-annual` | body (allowance/adjustment fields) | Create or amend annual allowances |
+| `GET /annual-submission` | `businessId`, `taxYear` (query, required) | Retrieve annual submission |
+
+**Key body fields for `PUT /submit-annual`:**
+| Field | Type | Description |
+|---|---|---|
+| `income_source_id` | string | businessId |
+| `tax_year` | string | e.g. `2024-25` |
+| `uk_property_income_allowance` | float (optional) | [Non-FHL] Property income allowance |
+| `uk_balancing_charge` | float (optional) | [Non-FHL] Balancing charge |
+| `uk_non_resident_landlord` | bool (optional) | [Non-FHL] Non-resident landlord |
+| `fhl_property_income_allowance` | float (optional) | [FHL] Property income allowance |
+| `fhl_balancing_charge` | float (optional) | [FHL] Balancing charge |
+| `fhl_period_of_grace_adjustment` | bool (optional) | [FHL] Period of grace adjustment |
+
+---
+
+#### Self-Employment Cumulative Period Summary
+
+| Endpoint | Parameters | Description |
+|---|---|---|
+| `PUT /self-employment-cumulative` | body (income/expense fields) | Create or amend SE cumulative summary |
+| `GET /self-employment-cumulative` | `businessId`, `taxYear` (query, required) | Retrieve SE cumulative summary |
+
+**Key body fields for `PUT /self-employment-cumulative`:**
+| Field | Type | Description |
+|---|---|---|
+| `income_source_id` | string | businessId for the SE income source |
+| `tax_year` | string | e.g. `2024-25` |
+| `period_start_date` | string | YYYY-MM-DD |
+| `period_end_date` | string | YYYY-MM-DD |
+| `turnover` | float | Gross receipts / turnover YTD |
+| `cost_of_goods` | float | Cost of goods bought for resale YTD |
+| `wages_and_staff_costs` | float | Staff costs YTD |
+| `premises_running_costs` | float | Rent, rates, power YTD |
+| `maintenance_costs` | float | Repairs and maintenance YTD |
+| (+ other expense fields) | float | All default to 0 |
 
 ---
 
