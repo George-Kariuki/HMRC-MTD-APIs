@@ -258,142 +258,135 @@ async def obligations(
 
 # ── Periodic Submission ───────────────────────────────────────────────────────────
 
-class PeriodicSubmissionRequest(BaseModel):
-    """
-    Payload for creating or amending a UK property periodic submission.
+class PeriodicAmountsBody(BaseModel):
+    """Income and expense amounts for a UK property periodic submission (all YTD)."""
 
-    All monetary figures must be CUMULATIVE YEAR-TO-DATE (not just the quarter).
-    start_date / end_date must exactly match the obligation periodStartDate /
-    periodEndDate returned by GET /obligations.
-    """
-
-    income_source_id: str = Field(
-        ..., description="businessId from GET /business-details"
-    )
-    start_date: str = Field(
-        ..., description="Period start date YYYY-MM-DD (must match obligation)"
-    )
-    end_date: str = Field(
-        ..., description="Period end date YYYY-MM-DD (must match obligation)"
-    )
-    tax_year: Optional[str] = Field(
-        None,
-        description="HMRC tax year e.g. '2024-25'. Derived automatically if omitted.",
-    )
-    property_type: str = Field(
-        "ukNonFhlProperty",
-        description="'ukNonFhlProperty' (standard BTL) or 'ukFhlProperty' (FHL)",
-    )
-
-    # ── Income (cumulative YTD) ──────────────────────────────────────────────────
+    # ── Income ───────────────────────────────────────────────────────────────────
     rent_income:              float = Field(0.0,  description="Total rental income (YTD)")
     premiums_of_lease_grant:  float = Field(0.0,  description="Premiums of lease grant (YTD)")
     reverse_premiums:         float = Field(0.0,  description="Reverse premiums (YTD)")
     other_income:             float = Field(0.0,  description="Other property income (YTD)")
-    tax_deducted:             float = Field(0.0,  description="Tax already deducted (YTD)")
+    tax_deducted:             float = Field(0.0,  description="Tax already deducted at source (YTD)")
 
-    # ── Expenses (cumulative YTD) ────────────────────────────────────────────────
-    premises_running_costs:   float = Field(0.0,  description="Premises running costs (YTD)")
-    repairs_and_maintenance:  float = Field(0.0,  description="Repairs and maintenance (YTD)")
-    financial_costs:          float = Field(0.0,  description="Financial costs / mortgage interest (YTD)")
-    professional_fees:        float = Field(0.0,  description="Professional fees (YTD)")
-    cost_of_services:         float = Field(0.0,  description="Cost of services (YTD)")
-    other_expenses:           float = Field(0.0,  description="Other expenses (YTD)")
+    # ── Expenses ─────────────────────────────────────────────────────────────────
+    premises_running_costs:    float = Field(0.0, description="Premises running costs (YTD)")
+    repairs_and_maintenance:   float = Field(0.0, description="Repairs and maintenance (YTD)")
+    financial_costs:           float = Field(0.0, description="Financial costs / mortgage interest (YTD)")
+    professional_fees:         float = Field(0.0, description="Professional fees (YTD)")
+    cost_of_services:          float = Field(0.0, description="Cost of services (YTD)")
+    other_expenses:            float = Field(0.0, description="Other allowable expenses (YTD)")
     residential_financial_cost: float = Field(0.0, description="Residential financial cost (YTD)")
-    travel_costs:             float = Field(0.0,  description="Travel costs (YTD)")
-
-    # ── Amendment ────────────────────────────────────────────────────────────────
-    submission_id: Optional[str] = Field(
-        None,
-        description=(
-            "If provided, amends an existing submission (PUT). "
-            "Omit to create a new one (POST)."
-        ),
-    )
+    travel_costs:              float = Field(0.0, description="Travel costs (YTD)")
 
 
 @router.post("/submit-periodic", tags=["HMRC"])
 async def submit_periodic(
-    payload: PeriodicSubmissionRequest,
+    amounts: PeriodicAmountsBody,
     request: Request,
     x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId from GET /business-details (e.g. XAIS12345678901)",
+    ),
+    start_date: str = Query(
+        ...,
+        alias="startDate",
+        description="Period start YYYY-MM-DD — must match obligation periodStartDate",
+    ),
+    end_date: str = Query(
+        ...,
+        alias="endDate",
+        description="Period end YYYY-MM-DD — must match obligation periodEndDate",
+    ),
+    tax_year: Optional[str] = Query(
+        None,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25'. Auto-derived from startDate if omitted.",
+    ),
+    property_type: str = Query(
+        "ukNonFhlProperty",
+        alias="propertyType",
+        description="'ukNonFhlProperty' (standard BTL) or 'ukFhlProperty' (FHL)",
+    ),
+    submission_id: Optional[str] = Query(
+        None,
+        alias="submissionId",
+        description="Provide to amend an existing submission. Omit to create a new one.",
+    ),
 ):
     """
-    Create or amend a cumulative year-to-date periodic property income/expense return.
+    Create or amend a cumulative year-to-date UK property income & expense return.
+
+    **Routing parameters** (shown above): businessId, startDate, endDate, taxYear, propertyType, submissionId.
+    **Financial amounts** (in the request body): all income and expense figures — all cumulative YTD.
 
     Workflow:
-      1. Call GET /obligations to get open obligation periods
-      2. Use periodStartDate / periodEndDate from the obligation as start_date / end_date
-      3. Call this endpoint with all YTD income + expense totals
-      4. If amending (re-submitting for the same period), include the submission_id
+      1. `GET /obligations` → copy `periodStartDate` → `startDate`, `periodEndDate` → `endDate`
+      2. Fill in all YTD income and expense totals in the request body
+      3. No submissionId → creates new; provide submissionId → amends existing
 
-    Behaviour:
-      - No submission_id → POST (create new)
-      - submission_id provided → PUT (amend existing)
-
-    HMRC endpoint (create):  POST /individuals/business/property/uk/{nino}/{bid}/period/{ty}
-    HMRC endpoint (amend):   PUT  /individuals/business/property/uk/{nino}/{bid}/period/{ty}/{sid}
-    Both use Accept v6.0.
+    HMRC endpoint (create): POST /individuals/business/property/uk/{nino}/{bid}/period/{ty}  (v6.0)
+    HMRC endpoint (amend):  PUT  /individuals/business/property/uk/{nino}/{bid}/period/{ty}/{sid}  (v6.0)
     """
     session_id = _require_session(x_session_id)
     tokens, nino = _require_nino(session_id)
 
-    # Derive tax year from the obligation start date if not explicitly supplied
-    tax_year = payload.tax_year or derive_tax_year(payload.start_date)
+    resolved_tax_year = tax_year or derive_tax_year(start_date)
 
     income = {
-        "periodAmount":          round(payload.rent_income, 2),
-        "premiumsOfLeaseGrant":  round(payload.premiums_of_lease_grant, 2),
-        "reversePremiums":       round(payload.reverse_premiums, 2),
-        "otherIncome":           round(payload.other_income, 2),
-        "taxDeducted":           round(payload.tax_deducted, 2),
+        "periodAmount":         round(amounts.rent_income, 2),
+        "premiumsOfLeaseGrant": round(amounts.premiums_of_lease_grant, 2),
+        "reversePremiums":      round(amounts.reverse_premiums, 2),
+        "otherIncome":          round(amounts.other_income, 2),
+        "taxDeducted":          round(amounts.tax_deducted, 2),
     }
     expenses = {
-        "premisesRunningCosts":   round(payload.premises_running_costs, 2),
-        "repairsAndMaintenance":  round(payload.repairs_and_maintenance, 2),
-        "financialCosts":         round(payload.financial_costs, 2),
-        "professionalFees":       round(payload.professional_fees, 2),
-        "costOfServices":         round(payload.cost_of_services, 2),
-        "other":                  round(payload.other_expenses, 2),
-        "residentialFinancialCost": round(payload.residential_financial_cost, 2),
-        "travelCosts":            round(payload.travel_costs, 2),
+        "premisesRunningCosts":     round(amounts.premises_running_costs, 2),
+        "repairsAndMaintenance":    round(amounts.repairs_and_maintenance, 2),
+        "financialCosts":           round(amounts.financial_costs, 2),
+        "professionalFees":         round(amounts.professional_fees, 2),
+        "costOfServices":           round(amounts.cost_of_services, 2),
+        "other":                    round(amounts.other_expenses, 2),
+        "residentialFinancialCost": round(amounts.residential_financial_cost, 2),
+        "travelCosts":              round(amounts.travel_costs, 2),
     }
 
     client = await _build_client(request, session_id)
 
-    if payload.submission_id:
+    if submission_id:
         result = await client.amend_period_summary(
             nino=nino,
-            business_id=payload.income_source_id,
-            tax_year=tax_year,
-            submission_id=payload.submission_id,
-            from_date=payload.start_date,
-            to_date=payload.end_date,
+            business_id=business_id,
+            tax_year=resolved_tax_year,
+            submission_id=submission_id,
+            from_date=start_date,
+            to_date=end_date,
             income=income,
             expenses=expenses,
-            property_type=payload.property_type,
+            property_type=property_type,
         )
         action = "amended"
     else:
         result = await client.create_period_summary(
             nino=nino,
-            business_id=payload.income_source_id,
-            tax_year=tax_year,
-            from_date=payload.start_date,
-            to_date=payload.end_date,
+            business_id=business_id,
+            tax_year=resolved_tax_year,
+            from_date=start_date,
+            to_date=end_date,
             income=income,
             expenses=expenses,
-            property_type=payload.property_type,
+            property_type=property_type,
         )
         action = "created"
 
     return {
         "success":    True,
         "action":     action,
-        "taxYear":    tax_year,
-        "fromDate":   payload.start_date,
-        "toDate":     payload.end_date,
-        "businessId": payload.income_source_id,
+        "taxYear":    resolved_tax_year,
+        "fromDate":   start_date,
+        "toDate":     end_date,
+        "businessId": business_id,
         "result":     result,
     }
 
@@ -456,71 +449,51 @@ async def periods_of_account(
 # ── Annual Submission ─────────────────────────────────────────────────────────────
 
 
-class AnnualSubmissionRequest(BaseModel):
+class AnnualAdjustmentsBody(BaseModel):
     """
-    Create or amend a UK property business annual submission (allowances & adjustments).
-
-    Fields are split into FHL (Furnished Holiday Letting) and non-FHL (standard BTL).
-    Only populate the section relevant to your property type — HMRC ignores the other.
-
-    Postman reference: Property Business → Annual Submissions → Create and Amend
-    HMRC endpoint: PUT /individuals/business/property/uk/{nino}/{businessId}/annual/{taxYear} v6.0
+    Allowance and adjustment fields for the annual UK property business submission.
+    Populate only the section relevant to your property type (Non-FHL or FHL).
+    All fields are optional — omit fields that do not apply.
     """
-    income_source_id: str = Field(..., description="businessId from GET /business-details")
-    tax_year: str          = Field(..., description="HMRC tax year e.g. '2024-25'")
-
     # ── Non-FHL (Standard Buy-to-Let) ────────────────────────────────────────────
-    uk_property_income_allowance: Optional[float] = Field(
-        None, description="[Non-FHL] Property income allowance (£)"
-    )
-    uk_balancing_charge: Optional[float] = Field(
-        None, description="[Non-FHL] Balancing charge (£)"
-    )
-    uk_bpra_balancing_charges: Optional[float] = Field(
-        None,
-        description="[Non-FHL] Business premises renovation allowance balancing charges (£)",
-    )
-    uk_non_resident_landlord: Optional[bool] = Field(
-        None, description="[Non-FHL] Is the landlord non-resident?"
-    )
-    uk_rent_a_room_jointly_let: Optional[bool] = Field(
-        None, description="[Non-FHL] Rent-a-room: is the property jointly let?"
-    )
+    uk_property_income_allowance: Optional[float] = Field(None, description="[Non-FHL] Property income allowance (£)")
+    uk_balancing_charge: Optional[float]          = Field(None, description="[Non-FHL] Balancing charge (£)")
+    uk_bpra_balancing_charges: Optional[float]    = Field(None, description="[Non-FHL] Business premises renovation allowance balancing charges (£)")
+    uk_non_resident_landlord: Optional[bool]      = Field(None, description="[Non-FHL] Is the landlord non-resident?")
+    uk_rent_a_room_jointly_let: Optional[bool]    = Field(None, description="[Non-FHL] Rent-a-room: is the property jointly let?")
 
     # ── FHL (Furnished Holiday Letting) ──────────────────────────────────────────
-    fhl_property_income_allowance: Optional[float] = Field(
-        None, description="[FHL] Property income allowance (£)"
-    )
-    fhl_balancing_charge: Optional[float] = Field(
-        None, description="[FHL] Balancing charge (£)"
-    )
-    fhl_period_of_grace_adjustment: Optional[bool] = Field(
-        None, description="[FHL] Period of grace adjustment applies?"
-    )
-    fhl_bpra_balancing_charges: Optional[float] = Field(
-        None,
-        description="[FHL] Business premises renovation allowance balancing charges (£)",
-    )
-    fhl_non_resident_landlord: Optional[bool] = Field(
-        None, description="[FHL] Is the landlord non-resident?"
-    )
-    fhl_rent_a_room_jointly_let: Optional[bool] = Field(
-        None, description="[FHL] Rent-a-room: is the property jointly let?"
-    )
+    fhl_property_income_allowance: Optional[float] = Field(None, description="[FHL] Property income allowance (£)")
+    fhl_balancing_charge: Optional[float]          = Field(None, description="[FHL] Balancing charge (£)")
+    fhl_period_of_grace_adjustment: Optional[bool] = Field(None, description="[FHL] Period of grace adjustment applies?")
+    fhl_bpra_balancing_charges: Optional[float]    = Field(None, description="[FHL] Business premises renovation allowance balancing charges (£)")
+    fhl_non_resident_landlord: Optional[bool]      = Field(None, description="[FHL] Is the landlord non-resident?")
+    fhl_rent_a_room_jointly_let: Optional[bool]    = Field(None, description="[FHL] Rent-a-room: is the property jointly let?")
 
 
 @router.put("/submit-annual", tags=["HMRC"])
 async def submit_annual(
-    payload: AnnualSubmissionRequest,
+    adjustments: AnnualAdjustmentsBody,
     request: Request,
     x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25'",
+    ),
 ):
     """
     Create or amend the annual UK property business allowances and adjustments.
 
-    Populate the Non-FHL fields for a standard buy-to-let, or the FHL fields for
-    a Furnished Holiday Letting.  Fields left blank (None) are omitted from the
-    HMRC request.
+    **Routing parameters** (shown above): businessId, taxYear.
+    **Adjustment fields** (in the request body): populate Non-FHL or FHL fields as applicable.
+
+    Fields left as null are omitted from the HMRC request body automatically.
 
     HMRC endpoint:
         PUT /individuals/business/property/uk/{nino}/{businessId}/annual/{taxYear}  (v6.0)
@@ -532,16 +505,15 @@ async def submit_annual(
     def _opt(v):
         return round(v, 2) if v is not None else None
 
-    # Build ukProperty block (non-FHL) only if any field is set
     uk_allowances = {k: v for k, v in {
-        "propertyIncomeAllowance": _opt(payload.uk_property_income_allowance),
+        "propertyIncomeAllowance": _opt(adjustments.uk_property_income_allowance),
     }.items() if v is not None}
     uk_adjustments = {k: v for k, v in {
-        "balancingCharge":                                _opt(payload.uk_balancing_charge),
-        "businessPremisesRenovationAllowanceBalancingCharges": _opt(payload.uk_bpra_balancing_charges),
-        "nonResidentLandlord":                            payload.uk_non_resident_landlord,
-        "rentARoom": {"jointlyLet": payload.uk_rent_a_room_jointly_let}
-                     if payload.uk_rent_a_room_jointly_let is not None else None,
+        "balancingCharge":                                _opt(adjustments.uk_balancing_charge),
+        "businessPremisesRenovationAllowanceBalancingCharges": _opt(adjustments.uk_bpra_balancing_charges),
+        "nonResidentLandlord":                            adjustments.uk_non_resident_landlord,
+        "rentARoom": {"jointlyLet": adjustments.uk_rent_a_room_jointly_let}
+                     if adjustments.uk_rent_a_room_jointly_let is not None else None,
     }.items() if v is not None}
     uk_property = {}
     if uk_allowances:
@@ -549,17 +521,16 @@ async def submit_annual(
     if uk_adjustments:
         uk_property["adjustments"] = uk_adjustments
 
-    # Build ukFhlProperty block only if any field is set
     fhl_allowances = {k: v for k, v in {
-        "propertyIncomeAllowance": _opt(payload.fhl_property_income_allowance),
+        "propertyIncomeAllowance": _opt(adjustments.fhl_property_income_allowance),
     }.items() if v is not None}
     fhl_adjustments = {k: v for k, v in {
-        "balancingCharge":                                _opt(payload.fhl_balancing_charge),
-        "periodOfGraceAdjustment":                        payload.fhl_period_of_grace_adjustment,
-        "businessPremisesRenovationAllowanceBalancingCharges": _opt(payload.fhl_bpra_balancing_charges),
-        "nonResidentLandlord":                            payload.fhl_non_resident_landlord,
-        "rentARoom": {"jointlyLet": payload.fhl_rent_a_room_jointly_let}
-                     if payload.fhl_rent_a_room_jointly_let is not None else None,
+        "balancingCharge":                                _opt(adjustments.fhl_balancing_charge),
+        "periodOfGraceAdjustment":                        adjustments.fhl_period_of_grace_adjustment,
+        "businessPremisesRenovationAllowanceBalancingCharges": _opt(adjustments.fhl_bpra_balancing_charges),
+        "nonResidentLandlord":                            adjustments.fhl_non_resident_landlord,
+        "rentARoom": {"jointlyLet": adjustments.fhl_rent_a_room_jointly_let}
+                     if adjustments.fhl_rent_a_room_jointly_let is not None else None,
     }.items() if v is not None}
     fhl_property = {}
     if fhl_allowances:
@@ -575,11 +546,11 @@ async def submit_annual(
 
     result = await client.amend_annual_submission(
         nino=nino,
-        business_id=payload.income_source_id,
-        tax_year=payload.tax_year,
+        business_id=business_id,
+        tax_year=tax_year,
         body=body,
     )
-    return {"success": True, "taxYear": payload.tax_year, "businessId": payload.income_source_id, "result": result}
+    return {"success": True, "taxYear": tax_year, "businessId": business_id, "result": result}
 
 
 @router.get("/annual-submission", tags=["HMRC"])
@@ -693,37 +664,17 @@ async def validate_fraud_headers(
 # ── UK Property Cumulative Period Summary ─────────────────────────────────────────
 
 
-class UKPropertyCumulativeRequest(BaseModel):
-    """
-    Create or amend a UK property cumulative income & expenses period summary.
+class PropertyIncomeBody(BaseModel):
+    """Income and expense amounts for a UK property cumulative period summary (all YTD)."""
 
-    All monetary values are CUMULATIVE YEAR-TO-DATE (not just the current quarter).
-    from_date / to_date must fall within the accounting periods returned by
-    GET /business-details/{businessId}/periods-of-account.
-
-    Use property_type = "ukNonFhlProperty" for standard buy-to-let,
-    or "ukFhlProperty" for Furnished Holiday Lettings.
-
-    Postman reference: Property Business → Income and Expenses Period Summaries
-    HMRC endpoint: PUT /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear} v6.0
-    """
-    income_source_id: str = Field(..., description="businessId from GET /business-details")
-    tax_year: str          = Field(..., description="HMRC tax year e.g. '2024-25'")
-    from_date: str         = Field(..., description="Period start date YYYY-MM-DD")
-    to_date: str           = Field(..., description="Period end date YYYY-MM-DD")
-    property_type: str     = Field(
-        "ukNonFhlProperty",
-        description="'ukNonFhlProperty' (standard BTL) or 'ukFhlProperty' (FHL)",
-    )
-
-    # ── Income (cumulative YTD) ───────────────────────────────────────────────────
+    # ── Income ───────────────────────────────────────────────────────────────────
     rent_income: float              = Field(0.0, description="Total rental income received (YTD)")
     premiums_of_lease_grant: float  = Field(0.0, description="Premiums of lease grant (YTD)")
     reverse_premiums: float         = Field(0.0, description="Reverse premiums (YTD)")
     other_income: float             = Field(0.0, description="Other property income (YTD)")
     tax_deducted: float             = Field(0.0, description="Tax already deducted at source (YTD)")
 
-    # ── Expenses (cumulative YTD) ─────────────────────────────────────────────────
+    # ── Expenses ─────────────────────────────────────────────────────────────────
     premises_running_costs: float     = Field(0.0, description="Premises running costs e.g. rent, rates (YTD)")
     repairs_and_maintenance: float    = Field(0.0, description="Repairs and maintenance (YTD)")
     financial_costs: float            = Field(0.0, description="Financial costs e.g. mortgage interest (YTD)")
@@ -736,15 +687,20 @@ class UKPropertyCumulativeRequest(BaseModel):
 
 @router.put("/property-cumulative", tags=["HMRC"])
 async def submit_property_cumulative(
-    payload: UKPropertyCumulativeRequest,
+    amounts: PropertyIncomeBody,
     request: Request,
     x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(..., alias="businessId", description="businessId from GET /business-details"),
+    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2024-25'"),
+    from_date: str = Query(..., alias="fromDate", description="Period start YYYY-MM-DD (from periods-of-account)"),
+    to_date: str = Query(..., alias="toDate", description="Period end YYYY-MM-DD"),
+    property_type: str = Query("ukNonFhlProperty", alias="propertyType", description="'ukNonFhlProperty' or 'ukFhlProperty'"),
 ):
     """
-    Create or amend a UK property cumulative period summary (income & expenses YTD).
+    Create or amend a UK property cumulative income & expenses period summary (YTD).
 
-    Use GET /business-details/{businessId}/periods-of-account to find valid date ranges.
-    All figures must be cumulative year-to-date totals.
+    **Routing parameters** (shown above): businessId, taxYear, fromDate, toDate, propertyType.
+    **Financial amounts** (in the request body): all income and expense figures — cumulative YTD.
 
     HMRC endpoint:
         PUT /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}  (v6.0)
@@ -754,38 +710,44 @@ async def submit_property_cumulative(
     client = await _build_client(request, session_id)
 
     body = {
-        "fromDate": payload.from_date,
-        "toDate":   payload.to_date,
-        payload.property_type: {
+        "fromDate": from_date,
+        "toDate":   to_date,
+        property_type: {
             "income": {
-                "periodAmount":         round(payload.rent_income, 2),
-                "premiumsOfLeaseGrant": round(payload.premiums_of_lease_grant, 2),
-                "reversePremiums":      round(payload.reverse_premiums, 2),
-                "otherIncome":          round(payload.other_income, 2),
-                "taxDeducted":          round(payload.tax_deducted, 2),
+                "periodAmount":         round(amounts.rent_income, 2),
+                "premiumsOfLeaseGrant": round(amounts.premiums_of_lease_grant, 2),
+                "reversePremiums":      round(amounts.reverse_premiums, 2),
+                "otherIncome":          round(amounts.other_income, 2),
+                "taxDeducted":          round(amounts.tax_deducted, 2),
             },
             "expenses": {
-                "premisesRunningCosts":     round(payload.premises_running_costs, 2),
-                "repairsAndMaintenance":    round(payload.repairs_and_maintenance, 2),
-                "financialCosts":           round(payload.financial_costs, 2),
-                "professionalFees":         round(payload.professional_fees, 2),
-                "costOfServices":           round(payload.cost_of_services, 2),
-                "other":                    round(payload.other_expenses, 2),
-                "residentialFinancialCost": round(payload.residential_financial_cost, 2),
-                "travelCosts":              round(payload.travel_costs, 2),
+                "premisesRunningCosts":     round(amounts.premises_running_costs, 2),
+                "repairsAndMaintenance":    round(amounts.repairs_and_maintenance, 2),
+                "financialCosts":           round(amounts.financial_costs, 2),
+                "professionalFees":         round(amounts.professional_fees, 2),
+                "costOfServices":           round(amounts.cost_of_services, 2),
+                "other":                    round(amounts.other_expenses, 2),
+                "residentialFinancialCost": round(amounts.residential_financial_cost, 2),
+                "travelCosts":              round(amounts.travel_costs, 2),
             },
         },
     }
 
     result = await client.create_or_amend_uk_property_cumulative(
         nino=nino,
-        business_id=payload.income_source_id,
-        tax_year=payload.tax_year,
+        business_id=business_id,
+        tax_year=tax_year,
         body=body,
     )
     return {
         "success":    True,
         "action":     "created_or_amended",
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "fromDate":   from_date,
+        "toDate":     to_date,
+        "result":     result,
+    }
         "businessId": payload.income_source_id,
         "taxYear":    payload.tax_year,
         "fromDate":   payload.from_date,
@@ -828,26 +790,14 @@ async def get_property_cumulative(
 # ── Self-Employment Cumulative Period Summary ──────────────────────────────────────
 
 
-class SelfEmploymentCumulativeRequest(BaseModel):
-    """
-    Create or amend a self-employment cumulative period summary.
+class SEIncomeBody(BaseModel):
+    """Income and expense amounts for a self-employment cumulative period summary (all YTD)."""
 
-    All monetary values are CUMULATIVE YEAR-TO-DATE (not just the current quarter).
-    period_start_date / period_end_date are the accounting period boundaries.
-
-    Postman reference: Self Employment Business (MTD) (5.0) → Self-Employment Cumulative Period Summary
-    HMRC endpoint: PUT /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear} v5.0
-    """
-    income_source_id: str  = Field(..., description="businessId for the self-employment income source")
-    tax_year: str          = Field(..., description="HMRC tax year e.g. '2024-25'")
-    period_start_date: str = Field(..., description="Period start date YYYY-MM-DD e.g. '2025-04-06'")
-    period_end_date: str   = Field(..., description="Period end date YYYY-MM-DD e.g. '2025-07-05'")
-
-    # ── Income (cumulative YTD) ───────────────────────────────────────────────────
+    # ── Income ───────────────────────────────────────────────────────────────────
     turnover: float     = Field(0.0, description="Turnover / gross receipts (YTD)")
     other_income: float = Field(0.0, description="Other business income not included in turnover (YTD)")
 
-    # ── Expenses (cumulative YTD) — from Postman collection body ─────────────────
+    # ── Expenses ─────────────────────────────────────────────────────────────────
     cost_of_goods: float                  = Field(0.0, description="Cost of goods bought for resale (YTD)")
     payments_to_subcontractors: float     = Field(0.0, description="Payments to subcontractors (YTD)")
     wages_and_staff_costs: float          = Field(0.0, description="Wages, salaries and other staff costs (YTD)")
@@ -862,15 +812,19 @@ class SelfEmploymentCumulativeRequest(BaseModel):
 
 @router.put("/self-employment-cumulative", tags=["HMRC"])
 async def submit_self_employment_cumulative(
-    payload: SelfEmploymentCumulativeRequest,
+    amounts: SEIncomeBody,
     request: Request,
     x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(..., alias="businessId", description="businessId for the self-employment income source"),
+    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2024-25'"),
+    period_start_date: str = Query(..., alias="periodStartDate", description="Period start YYYY-MM-DD e.g. '2025-04-06'"),
+    period_end_date: str = Query(..., alias="periodEndDate", description="Period end YYYY-MM-DD e.g. '2025-07-05'"),
 ):
     """
     Create or amend a self-employment cumulative period summary.
 
-    Provide cumulative year-to-date income and expense totals. HMRC assembles the
-    submission from periodDates, periodIncome and periodExpenses automatically.
+    **Routing parameters** (shown above): businessId, taxYear, periodStartDate, periodEndDate.
+    **Financial amounts** (in the request body): turnover, other income, and all expense fields — cumulative YTD.
 
     HMRC endpoint:
         PUT /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear}  (v5.0)
@@ -881,40 +835,40 @@ async def submit_self_employment_cumulative(
 
     body = {
         "periodDates": {
-            "periodStartDate": payload.period_start_date,
-            "periodEndDate":   payload.period_end_date,
+            "periodStartDate": period_start_date,
+            "periodEndDate":   period_end_date,
         },
         "periodIncome": {
-            "turnover": round(payload.turnover, 2),
-            "other":    round(payload.other_income, 2),
+            "turnover": round(amounts.turnover, 2),
+            "other":    round(amounts.other_income, 2),
         },
         "periodExpenses": {
-            "costOfGoods":                round(payload.cost_of_goods, 2),
-            "paymentsToSubcontractors":   round(payload.payments_to_subcontractors, 2),
-            "wagesAndStaffCosts":         round(payload.wages_and_staff_costs, 2),
-            "carVanTravelExpenses":       round(payload.car_van_travel_expenses, 2),
-            "premisesRunningCosts":       round(payload.premises_running_costs, 2),
-            "maintenanceCosts":           round(payload.maintenance_costs, 2),
-            "adminCosts":                 round(payload.admin_costs, 2),
-            "businessEntertainmentCosts": round(payload.business_entertainment_costs, 2),
-            "advertisingCosts":           round(payload.advertising_costs, 2),
-            "interestOnBankOtherLoans":   round(payload.interest_on_bank_other_loans, 2),
+            "costOfGoods":                round(amounts.cost_of_goods, 2),
+            "paymentsToSubcontractors":   round(amounts.payments_to_subcontractors, 2),
+            "wagesAndStaffCosts":         round(amounts.wages_and_staff_costs, 2),
+            "carVanTravelExpenses":       round(amounts.car_van_travel_expenses, 2),
+            "premisesRunningCosts":       round(amounts.premises_running_costs, 2),
+            "maintenanceCosts":           round(amounts.maintenance_costs, 2),
+            "adminCosts":                 round(amounts.admin_costs, 2),
+            "businessEntertainmentCosts": round(amounts.business_entertainment_costs, 2),
+            "advertisingCosts":           round(amounts.advertising_costs, 2),
+            "interestOnBankOtherLoans":   round(amounts.interest_on_bank_other_loans, 2),
         },
     }
 
     result = await client.create_or_amend_self_employment_cumulative(
         nino=nino,
-        business_id=payload.income_source_id,
-        tax_year=payload.tax_year,
+        business_id=business_id,
+        tax_year=tax_year,
         body=body,
     )
     return {
         "success":         True,
         "action":          "created_or_amended",
-        "businessId":      payload.income_source_id,
-        "taxYear":         payload.tax_year,
-        "periodStartDate": payload.period_start_date,
-        "periodEndDate":   payload.period_end_date,
+        "businessId":      business_id,
+        "taxYear":         tax_year,
+        "periodStartDate": period_start_date,
+        "periodEndDate":   period_end_date,
         "result":          result,
     }
 
