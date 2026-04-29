@@ -748,12 +748,6 @@ async def submit_property_cumulative(
         "toDate":     to_date,
         "result":     result,
     }
-        "businessId": payload.income_source_id,
-        "taxYear":    payload.tax_year,
-        "fromDate":   payload.from_date,
-        "toDate":     payload.to_date,
-        "result":     result,
-    }
 
 
 @router.get("/property-cumulative", tags=["HMRC"])
