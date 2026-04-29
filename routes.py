@@ -490,6 +490,96 @@ async def submit_annual(
     return {"success": True, "result": result}
 
 
+@router.get("/annual-submission", tags=["HMRC"])
+async def get_annual_submission(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId from GET /business-details (e.g. XAIS12345678901)",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25'",
+    ),
+):
+    """
+    Retrieve an existing UK property business annual submission (allowances & adjustments).
+
+    Use after PUT /submit-annual to confirm what was submitted, or to fetch the
+    current values before amending them.
+
+    HMRC endpoint:
+        GET /individuals/business/property/uk/{nino}/{businessId}/annual/{taxYear}  (v6.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    data = await client.get_annual_submission(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+@router.get("/period-summary", tags=["HMRC"])
+async def get_period_summary(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25'",
+    ),
+    submission_id: str = Query(
+        ...,
+        alias="submissionId",
+        description="submissionId returned by POST /submit-periodic",
+    ),
+):
+    """
+    Retrieve an existing UK property income & expenses period summary.
+
+    Use this to inspect a previously created periodic submission.
+    The submissionId is returned by POST /submit-periodic and can also be
+    found in the obligations response.
+
+    HMRC endpoint:
+        GET /individuals/business/property/uk/{nino}/{businessId}/period/{taxYear}/{submissionId}  (v6.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    data = await client.get_period_summary(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        submission_id=submission_id,
+    )
+    return {
+        "nino":         nino,
+        "businessId":   business_id,
+        "taxYear":      tax_year,
+        "submissionId": submission_id,
+        **data,
+    }
+
+
 # ── Debug / Validation (sandbox only) ────────────────────────────────────────────
 
 @router.get("/debug/validate-fraud-headers", tags=["Debug"])
