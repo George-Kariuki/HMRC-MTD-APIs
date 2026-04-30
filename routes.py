@@ -680,7 +680,23 @@ async def validate_fraud_headers(
 
 
 class PropertyIncomeBody(BaseModel):
-    """Income and expense amounts for a UK property cumulative period summary (all YTD)."""
+    """
+    Income and expense amounts for a UK property cumulative period summary (all YTD).
+
+    HMRC spec: fromDate/toDate are part of the JSON body (not query params).
+    They are optional for annual ITSA status / latent income sources.
+
+    HMRC expects `ukProperty` (tax years 2025-26+).
+    """
+
+    from_date: Optional[str] = Field(
+        None,
+        description="fromDate in HMRC body (YYYY-MM-DD). Optional for annual/latent submissions.",
+    )
+    to_date: Optional[str] = Field(
+        None,
+        description="toDate in HMRC body (YYYY-MM-DD). Optional for annual/latent submissions.",
+    )
 
     # ── Income ───────────────────────────────────────────────────────────────────
     rent_income: float              = Field(0.0, description="Total rental income received (YTD)")
@@ -706,16 +722,18 @@ async def submit_property_cumulative(
     request: Request,
     x_session_id: Optional[str] = Header(None),
     business_id: str = Query(..., alias="businessId", description="businessId from GET /business-details"),
-    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2024-25'"),
-    from_date: str = Query(..., alias="fromDate", description="Period start YYYY-MM-DD (from periods-of-account)"),
-    to_date: str = Query(..., alias="toDate", description="Period end YYYY-MM-DD"),
-    property_type: str = Query("ukNonFhlProperty", alias="propertyType", description="'ukNonFhlProperty' or 'ukFhlProperty'"),
+    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2025-26' (endpoint only supported from 2025-26)"),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. STATEFUL). Omit in production.",
+    ),
 ):
     """
     Create or amend a UK property cumulative income & expenses period summary (YTD).
 
-    **Routing parameters** (shown above): businessId, taxYear, fromDate, toDate, propertyType.
-    **Financial amounts** (in the request body): all income and expense figures — cumulative YTD.
+    **Routing parameters** (shown above): businessId, taxYear.
+    **Request body**: includes from_date/to_date (optional) and all income/expense amounts — cumulative YTD.
 
     HMRC endpoint:
         PUT /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}  (v6.0)
@@ -724,10 +742,8 @@ async def submit_property_cumulative(
     tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
 
-    body = {
-        "fromDate": from_date,
-        "toDate":   to_date,
-        property_type: {
+    body: dict = {
+        "ukProperty": {
             "income": {
                 "periodAmount":         round(amounts.rent_income, 2),
                 "premiumsOfLeaseGrant": round(amounts.premiums_of_lease_grant, 2),
@@ -745,22 +761,27 @@ async def submit_property_cumulative(
                 "residentialFinancialCost": round(amounts.residential_financial_cost, 2),
                 "travelCosts":              round(amounts.travel_costs, 2),
             },
-        },
+        }
     }
+    if amounts.from_date:
+        body["fromDate"] = amounts.from_date
+    if amounts.to_date:
+        body["toDate"] = amounts.to_date
 
     result = await client.create_or_amend_uk_property_cumulative(
         nino=nino,
         business_id=business_id,
         tax_year=tax_year,
         body=body,
+        gov_test_scenario=gov_test_scenario,
     )
     return {
         "success":    True,
         "action":     "created_or_amended",
         "businessId": business_id,
         "taxYear":    tax_year,
-        "fromDate":   from_date,
-        "toDate":     to_date,
+        "fromDate":   amounts.from_date,
+        "toDate":     amounts.to_date,
         "result":     result,
     }
 

@@ -605,6 +605,7 @@ class HMRCClient:
         business_id: str,
         tax_year: str,
         body: dict,
+        gov_test_scenario: Optional[str] = None,
     ) -> dict:
         """
         PUT /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}
@@ -624,7 +625,17 @@ class HMRCClient:
             resp = await client.put(
                 f"{self.base}/individuals/business/property/uk"
                 f"/{nino}/{business_id}/cumulative/{tax_year}",
-                headers=self._headers("6.0", {"Content-Type": "application/json"}),
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
                 json=body,
             )
         _raise_for_hmrc_error(resp)
