@@ -258,6 +258,47 @@ def _raise_for_hmrc_error(resp: httpx.Response) -> None:
     raise HTTPException(status_code=resp.status_code, detail=detail)
 
 
+def _json_or_empty(resp: httpx.Response) -> dict:
+    """
+    Safely parse a successful HMRC response.
+
+    Some HMRC endpoints (and some sandbox scenarios) can return an empty body
+    (e.g. 204 No Content, or occasionally 200 with no JSON). In those cases,
+    return a small metadata object instead of raising JSONDecodeError.
+    """
+    # Prefer explicit no-content handling first
+    if resp.status_code == 204:
+        return {
+            "status": resp.status_code,
+            "correlationId": resp.headers.get("X-CorrelationId"),
+        }
+
+    # Empty body on a 2xx response
+    if not resp.content or not resp.text or resp.text.strip() == "":
+        return {
+            "status": resp.status_code,
+            "correlationId": resp.headers.get("X-CorrelationId"),
+        }
+
+    # If it's JSON, parse; otherwise return raw text
+    ctype = (resp.headers.get("content-type") or "").lower()
+    if "json" not in ctype:
+        return {
+            "status": resp.status_code,
+            "correlationId": resp.headers.get("X-CorrelationId"),
+            "raw": resp.text,
+        }
+
+    try:
+        return resp.json()
+    except Exception:
+        return {
+            "status": resp.status_code,
+            "correlationId": resp.headers.get("X-CorrelationId"),
+            "raw": resp.text,
+        }
+
+
 # ── HMRC API client ──────────────────────────────────────────────────────────────
 
 class HMRCClient:
@@ -312,7 +353,7 @@ class HMRCClient:
                 headers=self._headers("2.0"),
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     async def retrieve_business(self, nino: str, business_id: str) -> dict:
         """
@@ -330,7 +371,7 @@ class HMRCClient:
                 headers=self._headers("2.0"),
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     async def retrieve_periods_of_account(
         self, nino: str, business_id: str, tax_year: str
@@ -352,7 +393,7 @@ class HMRCClient:
                 headers=self._headers("2.0"),
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     # ── Obligations API ──────────────────────────────────────────────────────────
 
@@ -397,7 +438,7 @@ class HMRCClient:
                 params=params,
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     # ── Property Business Period Summaries ────────────────────────────────────────
 
@@ -442,7 +483,7 @@ class HMRCClient:
                 json=body,
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     async def amend_period_summary(
         self,
@@ -479,7 +520,7 @@ class HMRCClient:
                 json=body,
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     async def get_period_summary(
         self,
@@ -501,7 +542,7 @@ class HMRCClient:
                 headers=self._headers("6.0"),
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     # ── Annual Submissions ────────────────────────────────────────────────────────
 
@@ -527,7 +568,7 @@ class HMRCClient:
                 json=body,
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     async def get_annual_submission(
         self,
@@ -546,7 +587,7 @@ class HMRCClient:
                 headers=self._headers("6.0"),
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     # ── UK Property Cumulative Period Summary ─────────────────────────────────────
 
@@ -582,7 +623,7 @@ class HMRCClient:
         # HMRC returns 204 No Content on success for this endpoint
         if resp.status_code == 204:
             return {"message": "Cumulative period summary created/amended successfully."}
-        return resp.json()
+        return _json_or_empty(resp)
 
     async def retrieve_uk_property_cumulative(
         self,
@@ -607,7 +648,7 @@ class HMRCClient:
                 headers=self._headers("6.0"),
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     # ── Self-Employment Cumulative Period Summary ──────────────────────────────────
 
@@ -647,7 +688,7 @@ class HMRCClient:
         _raise_for_hmrc_error(resp)
         if resp.status_code == 204:
             return {"message": "Self-employment cumulative period summary created/amended successfully."}
-        return resp.json()
+        return _json_or_empty(resp)
 
     async def retrieve_self_employment_cumulative(
         self,
@@ -672,7 +713,7 @@ class HMRCClient:
                 headers=self._headers("5.0"),
             )
         _raise_for_hmrc_error(resp)
-        return resp.json()
+        return _json_or_empty(resp)
 
     # ── Fraud header validation (sandbox only) ────────────────────────────────────
 
@@ -689,4 +730,4 @@ class HMRCClient:
                 f"{self.base}/test/fraud-prevention-headers/validate",
                 headers=self._headers("1.0"),
             )
-        return resp.json()
+        return _json_or_empty(resp)
