@@ -564,6 +564,14 @@ async def get_annual_submission(
         alias="taxYear",
         description="HMRC tax year e.g. '2024-25'",
     ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description=(
+            "Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. UK_PROPERTY, STATEFUL). "
+            "Omit in production."
+        ),
+    ),
 ):
     """
     Retrieve an existing UK property business annual submission (allowances & adjustments).
@@ -582,6 +590,7 @@ async def get_annual_submission(
         nino=nino,
         business_id=business_id,
         tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
     )
     return {
         "nino":       nino,
@@ -610,6 +619,14 @@ async def get_period_summary(
         alias="submissionId",
         description="submissionId returned by POST /submit-periodic",
     ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description=(
+            "Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. STATEFUL). "
+            "If omitted, HMRC may respond 404 (no data found) in sandbox."
+        ),
+    ),
 ):
     """
     Retrieve an existing UK property income & expenses period summary.
@@ -630,6 +647,7 @@ async def get_period_summary(
         business_id=business_id,
         tax_year=tax_year,
         submission_id=submission_id,
+        gov_test_scenario=gov_test_scenario,
     )
     return {
         "nino":         nino,

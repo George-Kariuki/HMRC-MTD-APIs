@@ -528,6 +528,7 @@ class HMRCClient:
         business_id: str,
         tax_year: str,
         submission_id: str,
+        gov_test_scenario: Optional[str] = None,
     ) -> dict:
         """
         GET /individuals/business/property/uk/{nino}/{businessId}/period/{taxYear}/{submissionId}
@@ -539,7 +540,10 @@ class HMRCClient:
             resp = await client.get(
                 f"{self.base}/individuals/business/property/uk"
                 f"/{nino}/{business_id}/period/{tax_year}/{submission_id}",
-                headers=self._headers("6.0"),
+                headers=self._headers(
+                    "6.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
             )
         _raise_for_hmrc_error(resp)
         return _json_or_empty(resp)
@@ -575,6 +579,7 @@ class HMRCClient:
         nino: str,
         business_id: str,
         tax_year: str,
+        gov_test_scenario: Optional[str] = None,
     ) -> dict:
         """
         GET /individuals/business/property/uk/{nino}/{businessId}/annual/{taxYear}
@@ -584,7 +589,10 @@ class HMRCClient:
             resp = await client.get(
                 f"{self.base}/individuals/business/property/uk"
                 f"/{nino}/{business_id}/annual/{tax_year}",
-                headers=self._headers("6.0"),
+                headers=self._headers(
+                    "6.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
             )
         _raise_for_hmrc_error(resp)
         return _json_or_empty(resp)
