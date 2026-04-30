@@ -15,7 +15,7 @@ Authentication model:
 
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from auth import get_valid_access_token
@@ -449,31 +449,65 @@ async def periods_of_account(
 # ── Annual Submission ─────────────────────────────────────────────────────────────
 
 
-class AnnualAdjustmentsBody(BaseModel):
-    """
-    Allowance and adjustment fields for the annual UK property business submission.
-    Populate only the section relevant to your property type (Non-FHL or FHL).
-    All fields are optional — omit fields that do not apply.
-    """
-    # ── Non-FHL (Standard Buy-to-Let) ────────────────────────────────────────────
-    uk_property_income_allowance: Optional[float] = Field(None, description="[Non-FHL] Property income allowance (£)")
-    uk_balancing_charge: Optional[float]          = Field(None, description="[Non-FHL] Balancing charge (£)")
-    uk_bpra_balancing_charges: Optional[float]    = Field(None, description="[Non-FHL] Business premises renovation allowance balancing charges (£)")
-    uk_non_resident_landlord: Optional[bool]      = Field(None, description="[Non-FHL] Is the landlord non-resident?")
-    uk_rent_a_room_jointly_let: Optional[bool]    = Field(None, description="[Non-FHL] Rent-a-room: is the property jointly let?")
-
-    # ── FHL (Furnished Holiday Letting) ──────────────────────────────────────────
-    fhl_property_income_allowance: Optional[float] = Field(None, description="[FHL] Property income allowance (£)")
-    fhl_balancing_charge: Optional[float]          = Field(None, description="[FHL] Balancing charge (£)")
-    fhl_period_of_grace_adjustment: Optional[bool] = Field(None, description="[FHL] Period of grace adjustment applies?")
-    fhl_bpra_balancing_charges: Optional[float]    = Field(None, description="[FHL] Business premises renovation allowance balancing charges (£)")
-    fhl_non_resident_landlord: Optional[bool]      = Field(None, description="[FHL] Is the landlord non-resident?")
-    fhl_rent_a_room_jointly_let: Optional[bool]    = Field(None, description="[FHL] Rent-a-room: is the property jointly let?")
+HMRC_ANNUAL_SUBMISSION_EXAMPLE = {
+    "submittedOn": "2020-06-17T10:59:47.544Z",
+    "foreignFhlEea": {
+        "adjustments": {
+            "privateUseAdjustment": 34343.45,
+            "balancingCharge": 53543.23,
+            "periodOfGraceAdjustment": True,
+        },
+        "allowances": {
+            "annualInvestmentAllowance": 3434.23,
+            "otherCapitalAllowance": 1343.34,
+            "electricChargePointAllowance": 6565.45,
+            "zeroEmissionsCarAllowance": 3456.34,
+        },
+    },
+    "foreignProperty": [
+        {
+            "countryCode": "LBN",
+            "adjustments": {
+                "privateUseAdjustment": 4553.34,
+                "balancingCharge": 3453.34,
+            },
+            "allowances": {
+                "annualInvestmentAllowance": 38330.95,
+                "costOfReplacingDomesticItems": 41985.17,
+                "zeroEmissionsGoodsVehicleAllowance": 9769.19,
+                "otherCapitalAllowance": 1049.21,
+                "electricChargePointAllowance": 3565.45,
+                "structuredBuildingAllowance": [
+                    {
+                        "amount": 3545.12,
+                        "firstYear": {
+                            "qualifyingDate": "2020-03-29",
+                            "qualifyingAmountExpenditure": 3453.34,
+                        },
+                        "building": {
+                            "name": "Blue Oaks",
+                            "number": "12",
+                            "postcode": "TF3 4GH",
+                        },
+                    }
+                ],
+                "zeroEmissionsCarAllowance": 3456.34,
+            },
+        }
+    ],
+}
 
 
 @router.put("/submit-annual", tags=["HMRC"])
 async def submit_annual(
-    adjustments: AnnualAdjustmentsBody,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC annual property business submission body. "
+            "Pass the body exactly as HMRC documents for your tax year (e.g. ukProperty / foreignProperty, etc.)."
+        ),
+        examples={"hmrc_example": {"summary": "HMRC example body", "value": HMRC_ANNUAL_SUBMISSION_EXAMPLE}},
+    ),
     request: Request,
     x_session_id: Optional[str] = Header(None),
     business_id: str = Query(
@@ -490,10 +524,9 @@ async def submit_annual(
     """
     Create or amend the annual UK property business allowances and adjustments.
 
-    **Routing parameters** (shown above): businessId, taxYear.
-    **Adjustment fields** (in the request body): populate Non-FHL or FHL fields as applicable.
-
-    Fields left as null are omitted from the HMRC request body automatically.
+    **Routing parameters** (shown above): businessId, taxYear.\n
+    **Request body**: pass the HMRC-shaped payload. Swagger shows a default example from HMRC docs.\n
+    Note: NINO is taken from the session (POST /auth/set-nino), so it is not a parameter here.
 
     HMRC endpoint:
         PUT /individuals/business/property/uk/{nino}/{businessId}/annual/{taxYear}  (v6.0)
@@ -501,48 +534,6 @@ async def submit_annual(
     session_id = _require_session(x_session_id)
     tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
-
-    def _opt(v):
-        return round(v, 2) if v is not None else None
-
-    uk_allowances = {k: v for k, v in {
-        "propertyIncomeAllowance": _opt(adjustments.uk_property_income_allowance),
-    }.items() if v is not None}
-    uk_adjustments = {k: v for k, v in {
-        "balancingCharge":                                _opt(adjustments.uk_balancing_charge),
-        "businessPremisesRenovationAllowanceBalancingCharges": _opt(adjustments.uk_bpra_balancing_charges),
-        "nonResidentLandlord":                            adjustments.uk_non_resident_landlord,
-        "rentARoom": {"jointlyLet": adjustments.uk_rent_a_room_jointly_let}
-                     if adjustments.uk_rent_a_room_jointly_let is not None else None,
-    }.items() if v is not None}
-    uk_property = {}
-    if uk_allowances:
-        uk_property["allowances"] = uk_allowances
-    if uk_adjustments:
-        uk_property["adjustments"] = uk_adjustments
-
-    fhl_allowances = {k: v for k, v in {
-        "propertyIncomeAllowance": _opt(adjustments.fhl_property_income_allowance),
-    }.items() if v is not None}
-    fhl_adjustments = {k: v for k, v in {
-        "balancingCharge":                                _opt(adjustments.fhl_balancing_charge),
-        "periodOfGraceAdjustment":                        adjustments.fhl_period_of_grace_adjustment,
-        "businessPremisesRenovationAllowanceBalancingCharges": _opt(adjustments.fhl_bpra_balancing_charges),
-        "nonResidentLandlord":                            adjustments.fhl_non_resident_landlord,
-        "rentARoom": {"jointlyLet": adjustments.fhl_rent_a_room_jointly_let}
-                     if adjustments.fhl_rent_a_room_jointly_let is not None else None,
-    }.items() if v is not None}
-    fhl_property = {}
-    if fhl_allowances:
-        fhl_property["allowances"] = fhl_allowances
-    if fhl_adjustments:
-        fhl_property["adjustments"] = fhl_adjustments
-
-    body: dict = {}
-    if uk_property:
-        body["ukProperty"] = uk_property
-    if fhl_property:
-        body["ukFhlProperty"] = fhl_property
 
     result = await client.amend_annual_submission(
         nino=nino,
