@@ -819,42 +819,84 @@ async def get_property_cumulative(
 
 # ── Self-Employment Cumulative Period Summary ──────────────────────────────────────
 
-
-class SEIncomeBody(BaseModel):
-    """Income and expense amounts for a self-employment cumulative period summary (all YTD)."""
-
-    # ── Income ───────────────────────────────────────────────────────────────────
-    turnover: float     = Field(0.0, description="Turnover / gross receipts (YTD)")
-    other_income: float = Field(0.0, description="Other business income not included in turnover (YTD)")
-
-    # ── Expenses ─────────────────────────────────────────────────────────────────
-    cost_of_goods: float                  = Field(0.0, description="Cost of goods bought for resale (YTD)")
-    payments_to_subcontractors: float     = Field(0.0, description="Payments to subcontractors (YTD)")
-    wages_and_staff_costs: float          = Field(0.0, description="Wages, salaries and other staff costs (YTD)")
-    car_van_travel_expenses: float        = Field(0.0, description="Car, van and travel expenses (YTD)")
-    premises_running_costs: float         = Field(0.0, description="Rent, rates, power and insurance costs (YTD)")
-    maintenance_costs: float              = Field(0.0, description="Repairs and maintenance of property and equipment (YTD)")
-    admin_costs: float                    = Field(0.0, description="Phone, fax, stationery and other office costs (YTD)")
-    business_entertainment_costs: float   = Field(0.0, description="Business entertainment costs (YTD)")
-    advertising_costs: float              = Field(0.0, description="Advertising costs (YTD)")
-    interest_on_bank_other_loans: float   = Field(0.0, description="Interest on bank and other loans (YTD)")
+# Default example body (from HMRC docs)
+HMRC_SELF_EMPLOYMENT_CUMULATIVE_EXAMPLE = {
+    "periodDates": {
+        "periodStartDate": "2025-04-06",
+        "periodEndDate": "2025-07-05",
+    },
+    "periodIncome": {
+        "turnover": 1000.99,
+        "other": 1000.09,
+        "taxTakenOffTradingIncome": 1000.99,
+    },
+    "periodExpenses": {
+        "costOfGoods": 1000.99,
+        "paymentsToSubcontractors": 1000.99,
+        "wagesAndStaffCosts": 1000.99,
+        "carVanTravelExpenses": 1000.99,
+        "premisesRunningCosts": -1000.99,
+        "maintenanceCosts": -1000.99,
+        "adminCosts": 1000.99,
+        "businessEntertainmentCosts": 1000.99,
+        "advertisingCosts": 1000.99,
+        "interestOnBankOtherLoans": -1000.99,
+        "financeCharges": -1000.99,
+        "irrecoverableDebts": -1000.99,
+        "professionalFees": 1000.99,
+        "depreciation": -1000.99,
+        "otherExpenses": 1000.99,
+    },
+    "periodDisallowableExpenses": {
+        "costOfGoodsDisallowable": 91000.99,
+        "paymentsToSubcontractorsDisallowable": 1000.99,
+        "wagesAndStaffCostsDisallowable": 1000.99,
+        "carVanTravelExpensesDisallowable": 1000.99,
+        "premisesRunningCostsDisallowable": -1000.99,
+        "maintenanceCostsDisallowable": -999.99,
+        "adminCostsDisallowable": 1000.99,
+        "businessEntertainmentCostsDisallowable": 1000.99,
+        "advertisingCostsDisallowable": 1000.99,
+        "interestOnBankOtherLoansDisallowable": -1000.99,
+        "financeChargesDisallowable": -1000.99,
+        "irrecoverableDebtsDisallowable": 1000.99,
+        "professionalFeesDisallowable": 1000.99,
+        "depreciationDisallowable": -1000.99,
+        "otherExpensesDisallowable": 1000.99,
+    },
+}
 
 
 @router.put("/self-employment-cumulative", tags=["HMRC"])
 async def submit_self_employment_cumulative(
-    amounts: SEIncomeBody,
     request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC self-employment cumulative period summary body. "
+            "Pass the payload exactly as HMRC documents (periodDates, periodIncome, periodExpenses, optional periodDisallowableExpenses)."
+        ),
+        openapi_examples={
+            "hmrc_example": {
+                "summary": "HMRC example body",
+                "value": HMRC_SELF_EMPLOYMENT_CUMULATIVE_EXAMPLE,
+            }
+        },
+    ),
     x_session_id: Optional[str] = Header(None),
     business_id: str = Query(..., alias="businessId", description="businessId for the self-employment income source"),
-    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2024-25'"),
-    period_start_date: str = Query(..., alias="periodStartDate", description="Period start YYYY-MM-DD e.g. '2025-04-06'"),
-    period_end_date: str = Query(..., alias="periodEndDate", description="Period end YYYY-MM-DD e.g. '2025-07-05'"),
+    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2025-26' (endpoint only supported from 2025-26)"),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. STATEFUL). Omit in production.",
+    ),
 ):
     """
     Create or amend a self-employment cumulative period summary.
 
-    **Routing parameters** (shown above): businessId, taxYear, periodStartDate, periodEndDate.
-    **Financial amounts** (in the request body): turnover, other income, and all expense fields — cumulative YTD.
+    **Routing parameters** (shown above): businessId, taxYear.
+    **Request body**: pass the HMRC-shaped payload (periodDates, periodIncome, periodExpenses, optional periodDisallowableExpenses).
 
     HMRC endpoint:
         PUT /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear}  (v5.0)
@@ -863,42 +905,18 @@ async def submit_self_employment_cumulative(
     tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
 
-    body = {
-        "periodDates": {
-            "periodStartDate": period_start_date,
-            "periodEndDate":   period_end_date,
-        },
-        "periodIncome": {
-            "turnover": round(amounts.turnover, 2),
-            "other":    round(amounts.other_income, 2),
-        },
-        "periodExpenses": {
-            "costOfGoods":                round(amounts.cost_of_goods, 2),
-            "paymentsToSubcontractors":   round(amounts.payments_to_subcontractors, 2),
-            "wagesAndStaffCosts":         round(amounts.wages_and_staff_costs, 2),
-            "carVanTravelExpenses":       round(amounts.car_van_travel_expenses, 2),
-            "premisesRunningCosts":       round(amounts.premises_running_costs, 2),
-            "maintenanceCosts":           round(amounts.maintenance_costs, 2),
-            "adminCosts":                 round(amounts.admin_costs, 2),
-            "businessEntertainmentCosts": round(amounts.business_entertainment_costs, 2),
-            "advertisingCosts":           round(amounts.advertising_costs, 2),
-            "interestOnBankOtherLoans":   round(amounts.interest_on_bank_other_loans, 2),
-        },
-    }
-
     result = await client.create_or_amend_self_employment_cumulative(
         nino=nino,
         business_id=business_id,
         tax_year=tax_year,
         body=body,
+        gov_test_scenario=gov_test_scenario,
     )
     return {
         "success":         True,
         "action":          "created_or_amended",
         "businessId":      business_id,
         "taxYear":         tax_year,
-        "periodStartDate": period_start_date,
-        "periodEndDate":   period_end_date,
         "result":          result,
     }
 
