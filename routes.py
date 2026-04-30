@@ -500,15 +500,21 @@ HMRC_ANNUAL_SUBMISSION_EXAMPLE = {
 
 @router.put("/submit-annual", tags=["HMRC"])
 async def submit_annual(
+    request: Request,
     body: dict = Body(
         ...,
         description=(
             "HMRC annual property business submission body. "
             "Pass the body exactly as HMRC documents for your tax year (e.g. ukProperty / foreignProperty, etc.)."
         ),
-        examples={"hmrc_example": {"summary": "HMRC example body", "value": HMRC_ANNUAL_SUBMISSION_EXAMPLE}},
+        # FastAPI `examples` expects a LIST. Use `openapi_examples` for Swagger UI named examples.
+        openapi_examples={
+            "hmrc_example": {
+                "summary": "HMRC example body",
+                "value": HMRC_ANNUAL_SUBMISSION_EXAMPLE,
+            }
+        },
     ),
-    request: Request,
     x_session_id: Optional[str] = Header(None),
     business_id: str = Query(
         ...,
