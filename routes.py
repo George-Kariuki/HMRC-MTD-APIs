@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from auth import get_valid_access_token
 from database import get_tokens, update_nino
-from hmrc_client import HMRCClient, derive_tax_year
+from hmrc_client import HMRCClient, assert_tax_year_at_least, derive_tax_year
 
 router = APIRouter()
 
@@ -135,7 +135,6 @@ async def business_details(
             "businessId":       b.get("businessId"),
             "typeOfBusiness":   b.get("typeOfBusiness"),
             "tradingName":      b.get("tradingName"),
-            "accountingType":   b.get("accountingType"),
             "commencementDate": b.get("commencementDate"),
         }
         for b in all_businesses
@@ -403,7 +402,8 @@ async def retrieve_business(
     Retrieve the full details of a single income source by its businessId.
 
     Use this after GET /business-details (list all) to inspect a specific business:
-    accountingType, commencementDate, latencyDetails, etc.
+    commencementDate, latencyDetails, etc.  For accounting type use
+    GET /business-details/{businessId}/accounting-type?taxYear=.
 
     HMRC endpoint:  GET /individuals/business/details/{nino}/{businessId}  (v2.0)
     """
@@ -443,6 +443,170 @@ async def periods_of_account(
         "businessId": business_id,
         "taxYear":    tax_year,
         **data,
+    }
+
+
+HMRC_PERIODS_OF_ACCOUNT_EXAMPLE = {
+    "periodsOfAccount": [
+        {
+            "startDate": "2025-04-06",
+            "endDate": "2025-12-31",
+        }
+    ]
+}
+
+
+@router.get("/business-details/{business_id}/accounting-type", tags=["HMRC"])
+async def get_accounting_type(
+    business_id: str,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26' (minimum 2025-26 in production)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Retrieve the accounting type (CASH or ACCRUALS) for a business in a tax year.
+
+    HMRC removed `accountingType` from Retrieve Business Details — use this endpoint
+    as the source of truth.
+
+    HMRC endpoint:
+        GET /individuals/business/details/{nino}/{businessId}/{taxYear}/accounting-type  (v2.0)
+    """
+    assert_tax_year_at_least(tax_year)
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.retrieve_accounting_type(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+@router.put("/business-details/{business_id}/accounting-type", tags=["HMRC"])
+async def update_accounting_type(
+    business_id: str,
+    request: Request,
+    body: dict = Body(
+        ...,
+        description='HMRC body: {"accountingType": "CASH" | "ACCRUALS"}',
+        openapi_examples={
+            "cash": {
+                "summary": "Cash basis",
+                "value": {"accountingType": "CASH"},
+            },
+            "accruals": {
+                "summary": "Accruals basis",
+                "value": {"accountingType": "ACCRUALS"},
+            },
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26' (minimum 2025-26 in production)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Create or update the accounting type for a business in a tax year.
+
+    In-year updates are allowed in production (June 2026 changelog — HMRC removed
+    `RULE_TAX_YEAR_NOT_ENDED` on this endpoint).
+
+    HMRC endpoint:
+        PUT /individuals/business/details/{nino}/{businessId}/{taxYear}/accounting-type  (v2.0)
+    """
+    assert_tax_year_at_least(tax_year)
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.update_accounting_type(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "result":     result,
+    }
+
+
+@router.put("/business-details/{business_id}/periods-of-account", tags=["HMRC"])
+async def update_periods_of_account(
+    business_id: str,
+    request: Request,
+    body: dict = Body(
+        ...,
+        description="HMRC periods-of-account body (periodsOfAccount array with startDate/endDate).",
+        openapi_examples={
+            "hmrc_example": {
+                "summary": "Single period of account",
+                "value": HMRC_PERIODS_OF_ACCOUNT_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Create or update the periods of account for a business in a given tax year.
+
+    Pair with GET /business-details/{businessId}/periods-of-account to read back
+    the periods after updating.
+
+    HMRC endpoint:
+        PUT /individuals/business/details/{nino}/{businessId}/{taxYear}/periods-of-account  (v2.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.create_or_update_periods_of_account(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "result":     result,
     }
 
 
@@ -738,6 +902,7 @@ async def submit_property_cumulative(
     HMRC endpoint:
         PUT /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}  (v6.0)
     """
+    assert_tax_year_at_least(tax_year)
     session_id = _require_session(x_session_id)
     tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -791,7 +956,15 @@ async def get_property_cumulative(
     request: Request,
     x_session_id: Optional[str] = Header(None),
     business_id: str = Query(..., alias="businessId", description="businessId from GET /business-details"),
-    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2024-25'"),
+    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2025-26' (endpoint only supported from 2025-26)"),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description=(
+            "Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. STATEFUL). "
+            "Omit in production."
+        ),
+    ),
 ):
     """
     Retrieve the current cumulative period summary (income & expenses YTD) for a
@@ -800,6 +973,7 @@ async def get_property_cumulative(
     HMRC endpoint:
         GET /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}  (v6.0)
     """
+    assert_tax_year_at_least(tax_year)
     session_id = _require_session(x_session_id)
     tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -808,6 +982,7 @@ async def get_property_cumulative(
         nino=nino,
         business_id=business_id,
         tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
     )
     return {
         "nino":       nino,
@@ -901,6 +1076,7 @@ async def submit_self_employment_cumulative(
     HMRC endpoint:
         PUT /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear}  (v5.0)
     """
+    assert_tax_year_at_least(tax_year)
     session_id = _require_session(x_session_id)
     tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -926,7 +1102,15 @@ async def get_self_employment_cumulative(
     request: Request,
     x_session_id: Optional[str] = Header(None),
     business_id: str = Query(..., alias="businessId", description="businessId for the self-employment business"),
-    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2024-25'"),
+    tax_year: str = Query(..., alias="taxYear", description="HMRC tax year e.g. '2025-26' (endpoint only supported from 2025-26)"),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description=(
+            "Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. STATEFUL). "
+            "Omit in production."
+        ),
+    ),
 ):
     """
     Retrieve the current self-employment cumulative period summary for the given
@@ -935,6 +1119,7 @@ async def get_self_employment_cumulative(
     HMRC endpoint:
         GET /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear}  (v5.0)
     """
+    assert_tax_year_at_least(tax_year)
     session_id = _require_session(x_session_id)
     tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -943,6 +1128,158 @@ async def get_self_employment_cumulative(
         nino=nino,
         business_id=business_id,
         tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+# ── Self-Employment Annual Submission ─────────────────────────────────────────────
+
+HMRC_SELF_EMPLOYMENT_ANNUAL_EXAMPLE = {
+    "adjustments": {
+        "includedNonTaxableProfits": 500.00,
+        "basisAdjustment": 100.00,
+        "accountingAdjustment": 100.00,
+        "adjustmentToProfitsForClass4": 123.45,
+    },
+    "allowances": {
+        "annualInvestmentAllowance": 1000.00,
+        "capitalAllowanceMainPool": 1000.00,
+        "capitalAllowanceSpecialRatePool": 1000.00,
+        "zeroEmissionsGoodsVehicleAllowance": 1000.00,
+        "enhancedCapitalAllowance": 1000.00,
+        "allowanceOnSales": 1000.00,
+        "capitalAllowanceSingleAssetPool": 1000.00,
+        "electricChargePointAllowance": 1000.00,
+        "zeroEmissionsCarAllowance": 1000.00,
+        "structuredBuildingAllowance": [
+            {
+                "amount": 1000.00,
+                "firstYear": {
+                    "qualifyingDate": "2025-04-06",
+                    "qualifyingAmountExpenditure": 1000.00,
+                },
+                "building": {
+                    "name": "Building Name",
+                    "number": "1",
+                    "postcode": "TF3 4NT",
+                },
+            }
+        ],
+    },
+}
+
+
+@router.put("/self-employment-annual", tags=["HMRC"])
+async def submit_self_employment_annual(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC self-employment annual submission body (adjustments and allowances). "
+            "Pass the payload exactly as HMRC documents for your tax year."
+        ),
+        openapi_examples={
+            "hmrc_example": {
+                "summary": "HMRC example with Class 4 adjustment (2026-27+)",
+                "value": HMRC_SELF_EMPLOYMENT_ANNUAL_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId for the self-employment income source",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. STATEFUL). Omit in production.",
+    ),
+):
+    """
+    Create or amend the self-employment annual submission (adjustments & allowances).
+
+    **Routing parameters** (shown above): businessId, taxYear.
+    **Request body**: pass the HMRC-shaped payload.
+
+    `adjustmentToProfitsForClass4` in `adjustments` is available from tax year **2026-27**
+    onwards.  Do not use deprecated fields `overlapReliefUsed` or `averagingAdjustment`
+    for tax years 2024-25 onwards.
+
+    HMRC endpoint:
+        PUT /individuals/business/self-employment/{nino}/{businessId}/annual/{taxYear}  (v5.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    result = await client.amend_self_employment_annual(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "taxYear":    tax_year,
+        "businessId": business_id,
+        "result":     result,
+    }
+
+
+@router.get("/self-employment-annual", tags=["HMRC"])
+async def get_self_employment_annual(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId for the self-employment income source",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description=(
+            "Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. STATEFUL). "
+            "Omit in production."
+        ),
+    ),
+):
+    """
+    Retrieve an existing self-employment annual submission (adjustments & allowances).
+
+    Use after PUT /self-employment-annual to confirm what was submitted.
+
+    HMRC endpoint:
+        GET /individuals/business/self-employment/{nino}/{businessId}/annual/{taxYear}  (v5.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    data = await client.get_self_employment_annual(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
     )
     return {
         "nino":       nino,
