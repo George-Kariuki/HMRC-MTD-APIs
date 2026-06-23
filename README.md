@@ -110,7 +110,21 @@ NINO is stored in the session — no need to pass it separately.
 |---|---|---|
 | `GET /business-details` | — | List all income sources (NINO from session) |
 | `GET /business-details/{businessId}` | `businessId` (path) | Retrieve a specific income source |
+| `GET /business-details/{businessId}/accounting-type` | `businessId` (path), `taxYear` (query, required), `govTestScenario` (optional) | Retrieve accounting type (CASH / ACCRUALS) — **use this instead of `accountingType` on list/retrieve** |
+| `PUT /business-details/{businessId}/accounting-type` | `businessId` (path), `taxYear` (query, required), body `{"accountingType":"CASH"\|"ACCRUALS"}` | Create or update accounting type (2025-26+, in-year updates allowed) |
 | `GET /business-details/{businessId}/periods-of-account` | `businessId` (path), `taxYear` (query, required) | Get valid accounting period windows |
+| `PUT /business-details/{businessId}/periods-of-account` | `businessId` (path), `taxYear` (query, required), body `periodsOfAccount` array | Create or update periods of account |
+
+> **Accounting type:** HMRC removed `accountingType` from Retrieve Business Details (v2.0). Call `GET .../accounting-type?taxYear=` for the current value.
+
+**Suggested Adalo flow:**
+```
+GET /business-details
+→ GET /business-details/{businessId}/accounting-type?taxYear=2025-26
+→ GET /business-details/{businessId}/periods-of-account?taxYear=2025-26
+→ GET /obligations
+→ PUT /property-cumulative or PUT /self-employment-cumulative
+```
 
 **Sample response — `/business-details`:**
 ```json
@@ -162,16 +176,18 @@ NINO is stored in the session — no need to pass it separately.
 
 #### UK Property Cumulative Period Summary
 
+> Cumulative endpoints require tax year **2025-26 or later**.
+
 | Endpoint | Parameters | Description |
 |---|---|---|
-| `PUT /property-cumulative` | body (income/expense fields) | Create or amend cumulative income & expenses |
-| `GET /property-cumulative` | `businessId`, `taxYear` (query, required) | Retrieve current cumulative summary |
+| `PUT /property-cumulative` | `businessId`, `taxYear` (query), `govTestScenario` (optional), body (income/expense fields) | Create or amend cumulative income & expenses |
+| `GET /property-cumulative` | `businessId`, `taxYear` (query, required), `govTestScenario` (optional) | Retrieve current cumulative summary |
 
 **Key body fields for `PUT /property-cumulative`:**
 | Field | Type | Description |
 |---|---|---|
 | `income_source_id` | string | businessId |
-| `tax_year` | string | e.g. `2024-25` |
+| `tax_year` | string | e.g. `2025-26` |
 | `from_date` | string | Period start YYYY-MM-DD |
 | `to_date` | string | Period end YYYY-MM-DD |
 | `property_type` | string | `ukNonFhlProperty` or `ukFhlProperty` |
@@ -206,16 +222,18 @@ NINO is stored in the session — no need to pass it separately.
 
 #### Self-Employment Cumulative Period Summary
 
+> Cumulative endpoints require tax year **2025-26 or later**.
+
 | Endpoint | Parameters | Description |
 |---|---|---|
-| `PUT /self-employment-cumulative` | body (income/expense fields) | Create or amend SE cumulative summary |
-| `GET /self-employment-cumulative` | `businessId`, `taxYear` (query, required) | Retrieve SE cumulative summary |
+| `PUT /self-employment-cumulative` | `businessId`, `taxYear` (query), `govTestScenario` (optional), body (HMRC JSON) | Create or amend SE cumulative summary |
+| `GET /self-employment-cumulative` | `businessId`, `taxYear` (query, required), `govTestScenario` (optional) | Retrieve SE cumulative summary |
 
 **Key body fields for `PUT /self-employment-cumulative`:**
 | Field | Type | Description |
 |---|---|---|
 | `income_source_id` | string | businessId for the SE income source |
-| `tax_year` | string | e.g. `2024-25` |
+| `tax_year` | string | e.g. `2025-26` |
 | `period_start_date` | string | YYYY-MM-DD |
 | `period_end_date` | string | YYYY-MM-DD |
 | `turnover` | float | Gross receipts / turnover YTD |
@@ -224,6 +242,24 @@ NINO is stored in the session — no need to pass it separately.
 | `premises_running_costs` | float | Rent, rates, power YTD |
 | `maintenance_costs` | float | Repairs and maintenance YTD |
 | (+ other expense fields) | float | All default to 0 |
+
+---
+
+#### Self-Employment Annual Submission (Adjustments & Allowances)
+
+| Endpoint | Parameters | Description |
+|---|---|---|
+| `PUT /self-employment-annual` | `businessId`, `taxYear` (query), `govTestScenario` (optional), body (HMRC JSON) | Create or amend SE annual adjustments & allowances |
+| `GET /self-employment-annual` | `businessId`, `taxYear` (query, required), `govTestScenario` (optional) | Retrieve SE annual submission |
+
+**Key body fields for `PUT /self-employment-annual`:**
+| Field | Type | Description |
+|---|---|---|
+| `adjustments.adjustmentToProfitsForClass4` | float (optional) | Class 4 NI profit adjustment — **2026-27+ only** |
+| `adjustments.basisAdjustment` | float (optional) | Basis period adjustment |
+| `allowances.annualInvestmentAllowance` | float (optional) | Annual investment allowance |
+
+> Do not use deprecated `overlapReliefUsed` or `averagingAdjustment` for tax years 2024-25 onwards.
 
 ---
 

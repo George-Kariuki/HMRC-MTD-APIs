@@ -244,6 +244,20 @@ def derive_tax_year(date_str: str) -> str:
     return f"{start_year}-{end_short}"
 
 
+def tax_year_start_year(tax_year: str) -> int:
+    """Return the start calendar year from an HMRC tax year string (e.g. '2025-26' → 2025)."""
+    return int(tax_year.split("-")[0])
+
+
+def assert_tax_year_at_least(tax_year: str, minimum: str = "2025-26") -> None:
+    """Reject tax years before the HMRC minimum for cumulative / accounting-type endpoints."""
+    if tax_year_start_year(tax_year) < tax_year_start_year(minimum):
+        raise HTTPException(
+            status_code=400,
+            detail=f"taxYear must be {minimum} or later for this endpoint.",
+        )
+
+
 def _raise_for_hmrc_error(resp: httpx.Response) -> None:
     """
     Convert a non-2xx HMRC response into a FastAPI HTTPException with
@@ -360,8 +374,8 @@ class HMRCClient:
         GET /individuals/business/details/{nino}/{businessId}   (Accept v2.0)
 
         Returns the full details of a single income source identified by businessId.
-        Useful for confirming accountingType, commencementDate and other metadata
-        for a known business before submitting.
+        Useful for confirming commencementDate, latencyDetails and other metadata.
+        For accounting type, use retrieve_accounting_type (not returned here since v2.0).
 
         Postman: Business Details API → Retrieve Business Details
         """
@@ -393,6 +407,105 @@ class HMRCClient:
                 headers=self._headers("2.0"),
             )
         _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def retrieve_accounting_type(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/details/{nino}/{businessId}/{taxYear}/accounting-type
+        (Accept v2.0)
+
+        Returns the accounting type (CASH or ACCRUALS) for the business in the
+        given tax year.  Minimum tax year 2025-26 in production.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/details/{nino}"
+                f"/{business_id}/{tax_year}/accounting-type",
+                headers=self._headers(
+                    "2.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def update_accounting_type(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        PUT /individuals/business/details/{nino}/{businessId}/{taxYear}/accounting-type
+        (Accept v2.0)
+
+        Creates or updates the accounting type for a business.  Body:
+        {"accountingType": "CASH" | "ACCRUALS"}
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/details/{nino}"
+                f"/{business_id}/{tax_year}/accounting-type",
+                headers=self._headers(
+                    "2.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Accounting type updated successfully."}
+        return _json_or_empty(resp)
+
+    async def create_or_update_periods_of_account(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        PUT /individuals/business/details/{nino}/{businessId}/{taxYear}/periods-of-account
+        (Accept v2.0)
+
+        Creates or updates the periods of account for a business in the given tax year.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/details/{nino}"
+                f"/{business_id}/{tax_year}/periods-of-account",
+                headers=self._headers(
+                    "2.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Periods of account created/updated successfully."}
         return _json_or_empty(resp)
 
     # ── Obligations API ──────────────────────────────────────────────────────────
@@ -649,6 +762,7 @@ class HMRCClient:
         nino: str,
         business_id: str,
         tax_year: str,
+        gov_test_scenario: Optional[str] = None,
     ) -> dict:
         """
         GET /individuals/business/property/uk/{nino}/{businessId}/cumulative/{taxYear}
@@ -664,7 +778,10 @@ class HMRCClient:
             resp = await client.get(
                 f"{self.base}/individuals/business/property/uk"
                 f"/{nino}/{business_id}/cumulative/{tax_year}",
-                headers=self._headers("6.0"),
+                headers=self._headers(
+                    "6.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
             )
         _raise_for_hmrc_error(resp)
         return _json_or_empty(resp)
@@ -725,6 +842,7 @@ class HMRCClient:
         nino: str,
         business_id: str,
         tax_year: str,
+        gov_test_scenario: Optional[str] = None,
     ) -> dict:
         """
         GET /individuals/business/self-employment/{nino}/{businessId}/cumulative/{taxYear}
@@ -740,7 +858,69 @@ class HMRCClient:
             resp = await client.get(
                 f"{self.base}/individuals/business/self-employment"
                 f"/{nino}/{business_id}/cumulative/{tax_year}",
-                headers=self._headers("5.0"),
+                headers=self._headers(
+                    "5.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    # ── Self-Employment Annual Submission ─────────────────────────────────────────
+
+    async def amend_self_employment_annual(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        PUT /individuals/business/self-employment/{nino}/{businessId}/annual/{taxYear}
+        (Accept v5.0)
+
+        Creates or amends the self-employment annual submission (adjustments & allowances).
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/self-employment"
+                f"/{nino}/{business_id}/annual/{tax_year}",
+                headers=self._headers(
+                    "5.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def get_self_employment_annual(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/self-employment/{nino}/{businessId}/annual/{taxYear}
+        (Accept v5.0)
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/self-employment"
+                f"/{nino}/{business_id}/annual/{tax_year}",
+                headers=self._headers(
+                    "5.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
             )
         _raise_for_hmrc_error(resp)
         return _json_or_empty(resp)
