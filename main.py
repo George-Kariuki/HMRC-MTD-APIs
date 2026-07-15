@@ -71,7 +71,7 @@ OPENAPI_TAGS = [
     {"name": "Obligations", "description": "Income & expenditure and final declaration obligations"},
     {
         "name": "Property Business — Period Summaries",
-        "description": "Legacy UK property period create / retrieve / amend",
+        "description": "UK and Foreign period create/retrieve/amend + list (tax years ≤ 2024-25)",
     },
     {
         "name": "Property Business — UK Cumulative",
@@ -79,7 +79,11 @@ OPENAPI_TAGS = [
     },
     {
         "name": "Property Business — Annual Submission",
-        "description": "UK property annual allowances and adjustments",
+        "description": "UK and Foreign property annual allowances/adjustments, plus shared delete",
+    },
+    {
+        "name": "Property Business — Historic",
+        "description": "Historic FHL / Non-FHL annual and period submissions (tax years 2017-18 to 2021-22)",
     },
     {
         "name": "Property Business — Foreign Property Details",

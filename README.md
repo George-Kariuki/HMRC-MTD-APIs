@@ -160,34 +160,30 @@ GET /business-details
 
 ---
 
-#### Periodic Submission (UK Property — Income & Expenses)
+#### Periodic Submission (UK & Foreign Property — ≤ 2024-25)
+
+> Period summary endpoints only support tax years **≤ 2024-25**. From **2025-26** use the cumulative endpoints.
 
 | Endpoint | Parameters | Description |
 |---|---|---|
-| `POST /submit-periodic` | body (all income/expense fields) | Create or amend a cumulative YTD periodic submission |
-| `GET /period-summary` | `businessId`, `taxYear`, `submissionId` (all query, required) | Retrieve a previously submitted period summary |
+| `POST /submit-periodic` | `businessId`, `startDate`, `endDate`, `taxYear`, `propertyType`, body | Create UK period summary |
+| `PUT /period-summary` | `businessId`, `taxYear`, `submissionId`, `propertyType`, body | Amend UK period summary |
+| `GET /period-summary` | `businessId`, `taxYear`, `submissionId` | Retrieve UK period summary |
+| `GET /period-summaries` | `businessId`, `taxYear` | List UK or foreign period summaries |
+| `POST /foreign-period` | `businessId`, `taxYear`, body (`fromDate`/`toDate`/…) | Create foreign period summary |
+| `GET /foreign-period` | `businessId`, `taxYear`, `submissionId` | Retrieve foreign period summary |
+| `PUT /foreign-period` | `businessId`, `taxYear`, `submissionId`, body | Amend foreign period summary |
 
-**Key body fields for `POST /submit-periodic`:**
-| Field | Type | Description |
-|---|---|---|
-| `income_source_id` | string | businessId from `/business-details` |
-| `start_date` | string | YYYY-MM-DD — must match obligation `periodStartDate` |
-| `end_date` | string | YYYY-MM-DD — must match obligation `periodEndDate` |
-| `tax_year` | string | e.g. `2024-25` (auto-derived if omitted) |
-| `property_type` | string | `ukNonFhlProperty` (default) or `ukFhlProperty` |
-| `rent_income` | float | Total rental income YTD |
-| `financial_costs` | float | Mortgage interest / financial costs YTD |
-| `repairs_and_maintenance` | float | Repairs YTD |
-| `professional_fees` | float | Legal, accounting etc. YTD |
-| `submission_id` | string | Include to amend an existing submission |
-
-> All monetary values must be **cumulative year-to-date** — not just the current quarter.
+**Notes:**
+- Create bodies include period dates. Amend bodies must **not** include `fromDate`/`toDate`.
+- UK body fields are mapped (`rent_income` → HMRC `periodAmount`, `other_expenses` → `other`).
+- Foreign bodies are passed as raw HMRC JSON (`foreignNonFhlProperty[]` with `countryCode`, optional `foreignFhlEea`).
 
 ---
 
 #### UK Property Cumulative Period Summary
 
-> Cumulative endpoints require tax year **2025-26 or later**.
+> Cumulative endpoints require tax year **2025-26 or later**. Body is built as HMRC `ukProperty` (not `ukNonFhlProperty`).
 
 | Endpoint | Parameters | Description |
 |---|---|---|
@@ -197,16 +193,9 @@ GET /business-details
 **Key body fields for `PUT /property-cumulative`:**
 | Field | Type | Description |
 |---|---|---|
-| `income_source_id` | string | businessId |
-| `tax_year` | string | e.g. `2025-26` |
-| `from_date` | string | Period start YYYY-MM-DD |
-| `to_date` | string | Period end YYYY-MM-DD |
-| `property_type` | string | `ukNonFhlProperty` or `ukFhlProperty` |
-| `rent_income` | float | YTD rental income |
-| `financial_costs` | float | YTD mortgage interest / financial costs |
-| `repairs_and_maintenance` | float | YTD repairs |
-| `professional_fees` | float | YTD professional fees |
-| (+ other expense fields) | float | All default to 0 |
+| `from_date` / `to_date` | string (optional) | Maps to HMRC `fromDate` / `toDate` |
+| `rent_income` | float | Maps to `ukProperty.income.periodAmount` |
+| other snake_case income/expense fields | float | Mapped to HMRC camelCase under `ukProperty` |
 
 ---
 
@@ -214,20 +203,45 @@ GET /business-details
 
 | Endpoint | Parameters | Description |
 |---|---|---|
-| `PUT /submit-annual` | body (allowance/adjustment fields) | Create or amend annual allowances |
-| `GET /annual-submission` | `businessId`, `taxYear` (query, required) | Retrieve annual submission |
+| `PUT /submit-annual` | `businessId`, `taxYear`, `govTestScenario` (optional), body (`ukProperty`) | Create or amend UK annual |
+| `GET /annual-submission` | `businessId`, `taxYear`, `govTestScenario` (optional) | Retrieve UK annual |
+| `PUT /foreign-annual` | `businessId`, `taxYear`, `govTestScenario` (optional), body (`foreignProperty[]`) | Create or amend foreign annual |
+| `GET /foreign-annual` | `businessId`, `taxYear`, `govTestScenario` (optional) | Retrieve foreign annual |
+| `DELETE /annual-submission` | `businessId`, `taxYear`, `govTestScenario` (optional) | Delete UK or foreign annual (shared HMRC path) |
 
-**Key body fields for `PUT /submit-annual`:**
-| Field | Type | Description |
+**Body notes:**
+- UK **2025-26+**: `ukProperty` only (FHL merged). Earlier years may use `ukFhlProperty` / `ukProperty`.
+- Foreign **2025-26**: `foreignProperty[{ countryCode, adjustments, allowances }]`.
+- Foreign **2026-27+**: same array but with `propertyId` (from Create Foreign Property Details) instead of `countryCode`.
+- Do not send `submittedOn` on PUT — that is a response field.
+
+---
+
+#### Historic UK Property (FHL / Non-FHL, 2017-18 to 2021-22)
+
+> No `businessId`. Dates outside this range should use the standard annual / period / cumulative APIs.
+
+| Endpoint | Parameters | Description |
 |---|---|---|
-| `income_source_id` | string | businessId |
-| `tax_year` | string | e.g. `2024-25` |
-| `uk_property_income_allowance` | float (optional) | [Non-FHL] Property income allowance |
-| `uk_balancing_charge` | float (optional) | [Non-FHL] Balancing charge |
-| `uk_non_resident_landlord` | bool (optional) | [Non-FHL] Non-resident landlord |
-| `fhl_property_income_allowance` | float (optional) | [FHL] Property income allowance |
-| `fhl_balancing_charge` | float (optional) | [FHL] Balancing charge |
-| `fhl_period_of_grace_adjustment` | bool (optional) | [FHL] Period of grace adjustment |
+| `PUT /historic-fhl-annual` | `taxYear`, body | Create/amend historic FHL annual |
+| `GET /historic-fhl-annual` | `taxYear` | Retrieve historic FHL annual |
+| `DELETE /historic-fhl-annual` | `taxYear` | Delete historic FHL annual |
+| `PUT /historic-non-fhl-annual` | `taxYear`, body | Create/amend historic Non-FHL annual |
+| `GET /historic-non-fhl-annual` | `taxYear` | Retrieve historic Non-FHL annual |
+| `DELETE /historic-non-fhl-annual` | `taxYear` | Delete historic Non-FHL annual |
+| `GET /historic-fhl-period` | — | List historic FHL periods |
+| `POST /historic-fhl-period` | body (`fromDate`/`toDate`/…) | Create historic FHL period → `periodId` |
+| `GET /historic-fhl-period/{periodId}` | path `periodId` | Retrieve historic FHL period |
+| `PUT /historic-fhl-period/{periodId}` | path `periodId`, body | Amend historic FHL period |
+| `GET /historic-non-fhl-period` | — | List historic Non-FHL periods |
+| `POST /historic-non-fhl-period` | body | Create historic Non-FHL period → `periodId` |
+| `GET /historic-non-fhl-period/{periodId}` | path `periodId` | Retrieve historic Non-FHL period |
+| `PUT /historic-non-fhl-period/{periodId}` | path `periodId`, body | Amend historic Non-FHL period |
+
+**Notes:**
+- Annual bodies use `annualAdjustments` / `annualAllowances` (not `ukFhlProperty`).
+- Period create includes dates; amend does not.
+- FHL period **amend** uses HMRC’s singular `premiseRunningCosts`; create uses `premisesRunningCosts`.
 
 ---
 
@@ -331,10 +345,11 @@ X-Session-ID: <your-session-id>
    → Call GET /obligations
    → Display list of open periods with due dates
 
-4. Submit quarterly figures
+4. Submit quarterly figures (≤ 2024-25)
    → User enters income + expenses for the period
-   → Call POST /submit-periodic with YTD totals
-   → Store returned submission_id for future amendments
+   → Call POST /submit-periodic with period dates + amounts
+   → Store returned submissionId; amend later via PUT /period-summary
+   → From 2025-26 use PUT /property-cumulative instead
 ```
 
 ---

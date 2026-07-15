@@ -258,6 +258,35 @@ def assert_tax_year_at_least(tax_year: str, minimum: str = "2025-26") -> None:
         )
 
 
+def assert_tax_year_at_most(tax_year: str, maximum: str = "2024-25") -> None:
+    """Reject tax years after the HMRC maximum for legacy period-summary endpoints."""
+    if tax_year_start_year(tax_year) > tax_year_start_year(maximum):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"taxYear must be {maximum} or earlier for this endpoint. "
+                f"From 2025-26 use the cumulative period summary endpoints."
+            ),
+        )
+
+
+def assert_tax_year_in_range(
+    tax_year: str,
+    minimum: str = "2017-18",
+    maximum: str = "2021-22",
+) -> None:
+    """Reject tax years outside the HMRC historic property submission range."""
+    start = tax_year_start_year(tax_year)
+    if start < tax_year_start_year(minimum) or start > tax_year_start_year(maximum):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"taxYear must be between {minimum} and {maximum} for historic "
+                f"property endpoints. For later years use the standard annual/period APIs."
+            ),
+        )
+
+
 def _raise_for_hmrc_error(resp: httpx.Response) -> None:
     """
     Convert a non-2xx HMRC response into a FastAPI HTTPException with
@@ -696,7 +725,7 @@ class HMRCClient:
         _raise_for_hmrc_error(resp)
         return _json_or_empty(resp)
 
-    # ── Property Business Period Summaries ────────────────────────────────────────
+    # ── Property Business Period Summaries (≤ 2024-25) ────────────────────────────
 
     async def create_period_summary(
         self,
@@ -708,20 +737,15 @@ class HMRCClient:
         income: dict,
         expenses: dict,
         property_type: str = "ukNonFhlProperty",
+        gov_test_scenario: Optional[str] = None,
     ) -> dict:
         """
         POST /individuals/business/property/uk/{nino}/{businessId}/period/{taxYear}
         (Accept v6.0)
 
-        Creates a new periodic (cumulative year-to-date) submission.
-        from_date / to_date MUST exactly match the obligation's periodStartDate /
-        periodEndDate — HMRC will reject mismatched dates.
-
-        Submissions are CUMULATIVE: income and expense figures must represent
-        total amounts from the start of the tax year, not just the current quarter.
-
-        property_type: "ukNonFhlProperty" (standard buy-to-let) or "ukFhlProperty"
-                       (Furnished Holiday Letting).
+        Creates a new UK property period summary. Tax years ≤ 2024-25 only.
+        from_date / to_date MUST exactly match the obligation period dates.
+        property_type: "ukNonFhlProperty" or "ukFhlProperty".
         """
         body = {
             "fromDate": from_date,
@@ -735,7 +759,17 @@ class HMRCClient:
             resp = await client.post(
                 f"{self.base}/individuals/business/property/uk"
                 f"/{nino}/{business_id}/period/{tax_year}",
-                headers=self._headers("6.0", {"Content-Type": "application/json"}),
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
                 json=body,
             )
         _raise_for_hmrc_error(resp)
@@ -747,22 +781,19 @@ class HMRCClient:
         business_id: str,
         tax_year: str,
         submission_id: str,
-        from_date: str,
-        to_date: str,
         income: dict,
         expenses: dict,
         property_type: str = "ukNonFhlProperty",
+        gov_test_scenario: Optional[str] = None,
     ) -> dict:
         """
         PUT /individuals/business/property/uk/{nino}/{businessId}/period/{taxYear}/{submissionId}
         (Accept v6.0)
 
-        Amends an existing periodic submission with updated cumulative figures.
-        submission_id is returned from the original create call (or from listing summaries).
+        Amends an existing UK property period summary.
+        Amend body must NOT include fromDate/toDate (create-only fields).
         """
         body = {
-            "fromDate": from_date,
-            "toDate":   to_date,
             property_type: {
                 "income":   income,
                 "expenses": expenses,
@@ -772,7 +803,17 @@ class HMRCClient:
             resp = await client.put(
                 f"{self.base}/individuals/business/property/uk"
                 f"/{nino}/{business_id}/period/{tax_year}/{submission_id}",
-                headers=self._headers("6.0", {"Content-Type": "application/json"}),
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
                 json=body,
             )
         _raise_for_hmrc_error(resp)
@@ -789,8 +830,6 @@ class HMRCClient:
         """
         GET /individuals/business/property/uk/{nino}/{businessId}/period/{taxYear}/{submissionId}
         (Accept v6.0)
-
-        Retrieves a previously submitted period summary.
         """
         async with httpx.AsyncClient() as client:
             resp = await client.get(
@@ -804,6 +843,126 @@ class HMRCClient:
         _raise_for_hmrc_error(resp)
         return _json_or_empty(resp)
 
+    async def list_property_period_summaries(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/property/{nino}/{businessId}/period/{taxYear}
+        (Accept v6.0)
+
+        Lists period summaries for a UK or foreign property business (≤ 2024-25).
+        Shared path — no uk/foreign segment.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property"
+                f"/{nino}/{business_id}/period/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def create_foreign_period_summary(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        POST /individuals/business/property/foreign/{nino}/{businessId}/period/{taxYear}
+        (Accept v6.0)
+
+        Creates a foreign property period summary. Tax years ≤ 2024-25 only.
+        Body: fromDate, toDate, optional foreignFhlEea, optional foreignNonFhlProperty[].
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/{business_id}/period/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def get_foreign_period_summary(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        submission_id: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/property/foreign/{nino}/{businessId}/period/{taxYear}/{submissionId}
+        (Accept v6.0)
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/{business_id}/period/{tax_year}/{submission_id}",
+                headers=self._headers(
+                    "6.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def amend_foreign_period_summary(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        submission_id: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        PUT /individuals/business/property/foreign/{nino}/{businessId}/period/{taxYear}/{submissionId}
+        (Accept v6.0)
+
+        Amend body must NOT include fromDate/toDate.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/{business_id}/period/{tax_year}/{submission_id}",
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
     # ── Annual Submissions ────────────────────────────────────────────────────────
 
     async def amend_annual_submission(
@@ -812,19 +971,30 @@ class HMRCClient:
         business_id: str,
         tax_year: str,
         body: dict,
+        gov_test_scenario: Optional[str] = None,
     ) -> dict:
         """
         PUT /individuals/business/property/uk/{nino}/{businessId}/annual/{taxYear}
         (Accept v6.0)
 
         Creates or amends the annual (end-of-year) allowances and adjustments
-        submission. Body should follow the HMRC ukFhlProperty / ukProperty schema.
+        submission. Body: ukProperty for 2025-26+ (ukFhlProperty / ukProperty for earlier).
         """
         async with httpx.AsyncClient() as client:
             resp = await client.put(
                 f"{self.base}/individuals/business/property/uk"
                 f"/{nino}/{business_id}/annual/{tax_year}",
-                headers=self._headers("6.0", {"Content-Type": "application/json"}),
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
                 json=body,
             )
         _raise_for_hmrc_error(resp)
@@ -849,6 +1019,345 @@ class HMRCClient:
                     "6.0",
                     {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
                 ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def amend_foreign_annual_submission(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        PUT /individuals/business/property/foreign/{nino}/{businessId}/annual/{taxYear}
+        (Accept v6.0)
+
+        Body shapes by tax year:
+        - ≤2024-25: foreignFhlEea and/or foreignProperty[{countryCode,...}]
+        - 2025-26: foreignProperty[{countryCode,...}]
+        - 2026-27+: foreignProperty[{propertyId,...}]
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/{business_id}/annual/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def get_foreign_annual_submission(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/property/foreign/{nino}/{businessId}/annual/{taxYear}
+        (Accept v6.0)
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/{business_id}/annual/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def delete_property_annual_submission(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        DELETE /individuals/business/property/{nino}/{businessId}/annual/{taxYear}
+        (Accept v6.0)
+
+        Deletes UK or Foreign property annual adjustments/allowances for the tax year.
+        Note: path has no uk/foreign segment — shared for both property types.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{self.base}/individuals/business/property"
+                f"/{nino}/{business_id}/annual/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Property annual submission deleted successfully."}
+        return _json_or_empty(resp)
+
+    # ── Historic UK Property (FHL / Non-FHL, tax years 2017-18 to 2021-22) ─────────
+
+    def _historic_headers(
+        self,
+        gov_test_scenario: Optional[str] = None,
+        *,
+        with_json: bool = False,
+    ) -> dict:
+        extra: dict = {}
+        if with_json:
+            extra["Content-Type"] = "application/json"
+        if gov_test_scenario:
+            extra["Gov-Test-Scenario"] = gov_test_scenario
+        return self._headers("6.0", extra or None)
+
+    async def amend_historic_fhl_annual(
+        self,
+        nino: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """PUT .../property/uk/annual/furnished-holiday-lettings/{nino}/{taxYear}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/property/uk/annual/"
+                f"furnished-holiday-lettings/{nino}/{tax_year}",
+                headers=self._historic_headers(gov_test_scenario, with_json=True),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def get_historic_fhl_annual(
+        self,
+        nino: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """GET .../property/uk/annual/furnished-holiday-lettings/{nino}/{taxYear}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/uk/annual/"
+                f"furnished-holiday-lettings/{nino}/{tax_year}",
+                headers=self._historic_headers(gov_test_scenario),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def delete_historic_fhl_annual(
+        self,
+        nino: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """DELETE .../property/uk/annual/furnished-holiday-lettings/{nino}/{taxYear}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{self.base}/individuals/business/property/uk/annual/"
+                f"furnished-holiday-lettings/{nino}/{tax_year}",
+                headers=self._historic_headers(gov_test_scenario),
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Historic FHL annual submission deleted successfully."}
+        return _json_or_empty(resp)
+
+    async def amend_historic_non_fhl_annual(
+        self,
+        nino: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """PUT .../property/uk/annual/non-furnished-holiday-lettings/{nino}/{taxYear}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/property/uk/annual/"
+                f"non-furnished-holiday-lettings/{nino}/{tax_year}",
+                headers=self._historic_headers(gov_test_scenario, with_json=True),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def get_historic_non_fhl_annual(
+        self,
+        nino: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """GET .../property/uk/annual/non-furnished-holiday-lettings/{nino}/{taxYear}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/uk/annual/"
+                f"non-furnished-holiday-lettings/{nino}/{tax_year}",
+                headers=self._historic_headers(gov_test_scenario),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def delete_historic_non_fhl_annual(
+        self,
+        nino: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """DELETE .../property/uk/annual/non-furnished-holiday-lettings/{nino}/{taxYear}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{self.base}/individuals/business/property/uk/annual/"
+                f"non-furnished-holiday-lettings/{nino}/{tax_year}",
+                headers=self._historic_headers(gov_test_scenario),
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Historic Non-FHL annual submission deleted successfully."}
+        return _json_or_empty(resp)
+
+    async def list_historic_fhl_periods(
+        self,
+        nino: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """GET .../property/uk/period/furnished-holiday-lettings/{nino}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/uk/period/"
+                f"furnished-holiday-lettings/{nino}",
+                headers=self._historic_headers(gov_test_scenario),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def create_historic_fhl_period(
+        self,
+        nino: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """POST .../property/uk/period/furnished-holiday-lettings/{nino}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.base}/individuals/business/property/uk/period/"
+                f"furnished-holiday-lettings/{nino}",
+                headers=self._historic_headers(gov_test_scenario, with_json=True),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def get_historic_fhl_period(
+        self,
+        nino: str,
+        period_id: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """GET .../property/uk/period/furnished-holiday-lettings/{nino}/{periodId}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/uk/period/"
+                f"furnished-holiday-lettings/{nino}/{period_id}",
+                headers=self._historic_headers(gov_test_scenario),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def amend_historic_fhl_period(
+        self,
+        nino: str,
+        period_id: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """PUT .../property/uk/period/furnished-holiday-lettings/{nino}/{periodId}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/property/uk/period/"
+                f"furnished-holiday-lettings/{nino}/{period_id}",
+                headers=self._historic_headers(gov_test_scenario, with_json=True),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def list_historic_non_fhl_periods(
+        self,
+        nino: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """GET .../property/uk/period/non-furnished-holiday-lettings/{nino}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/uk/period/"
+                f"non-furnished-holiday-lettings/{nino}",
+                headers=self._historic_headers(gov_test_scenario),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def create_historic_non_fhl_period(
+        self,
+        nino: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """POST .../property/uk/period/non-furnished-holiday-lettings/{nino}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.base}/individuals/business/property/uk/period/"
+                f"non-furnished-holiday-lettings/{nino}",
+                headers=self._historic_headers(gov_test_scenario, with_json=True),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def get_historic_non_fhl_period(
+        self,
+        nino: str,
+        period_id: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """GET .../property/uk/period/non-furnished-holiday-lettings/{nino}/{periodId}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/uk/period/"
+                f"non-furnished-holiday-lettings/{nino}/{period_id}",
+                headers=self._historic_headers(gov_test_scenario),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def amend_historic_non_fhl_period(
+        self,
+        nino: str,
+        period_id: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """PUT .../property/uk/period/non-furnished-holiday-lettings/{nino}/{periodId}"""
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/property/uk/period/"
+                f"non-furnished-holiday-lettings/{nino}/{period_id}",
+                headers=self._historic_headers(gov_test_scenario, with_json=True),
+                json=body,
             )
         _raise_for_hmrc_error(resp)
         return _json_or_empty(resp)

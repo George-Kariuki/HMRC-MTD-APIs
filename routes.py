@@ -23,6 +23,8 @@ from database import get_tokens, update_nino
 from hmrc_client import (
     HMRCClient,
     assert_tax_year_at_least,
+    assert_tax_year_at_most,
+    assert_tax_year_in_range,
     derive_tax_year,
     tax_year_start_year,
 )
@@ -327,84 +329,30 @@ async def final_declaration_obligations(
     }
 
 
-# ── Periodic Submission ───────────────────────────────────────────────────────────
+# ── Period Summaries (UK + Foreign, ≤ 2024-25) ────────────────────────────────────
 
 class PeriodicAmountsBody(BaseModel):
-    """Income and expense amounts for a UK property periodic submission (all YTD)."""
+    """Income and expense amounts for a UK property period summary."""
 
     # ── Income ───────────────────────────────────────────────────────────────────
-    rent_income:              float = Field(0.0,  description="Total rental income (YTD)")
-    premiums_of_lease_grant:  float = Field(0.0,  description="Premiums of lease grant (YTD)")
-    reverse_premiums:         float = Field(0.0,  description="Reverse premiums (YTD)")
-    other_income:             float = Field(0.0,  description="Other property income (YTD)")
-    tax_deducted:             float = Field(0.0,  description="Tax already deducted at source (YTD)")
+    rent_income:              float = Field(0.0,  description="Total rental income → periodAmount")
+    premiums_of_lease_grant:  float = Field(0.0,  description="Premiums of lease grant")
+    reverse_premiums:         float = Field(0.0,  description="Reverse premiums")
+    other_income:             float = Field(0.0,  description="Other property income")
+    tax_deducted:             float = Field(0.0,  description="Tax already deducted at source")
 
     # ── Expenses ─────────────────────────────────────────────────────────────────
-    premises_running_costs:    float = Field(0.0, description="Premises running costs (YTD)")
-    repairs_and_maintenance:   float = Field(0.0, description="Repairs and maintenance (YTD)")
-    financial_costs:           float = Field(0.0, description="Financial costs / mortgage interest (YTD)")
-    professional_fees:         float = Field(0.0, description="Professional fees (YTD)")
-    cost_of_services:          float = Field(0.0, description="Cost of services (YTD)")
-    other_expenses:            float = Field(0.0, description="Other allowable expenses (YTD)")
-    residential_financial_cost: float = Field(0.0, description="Residential financial cost (YTD)")
-    travel_costs:              float = Field(0.0, description="Travel costs (YTD)")
+    premises_running_costs:     float = Field(0.0, description="Premises running costs")
+    repairs_and_maintenance:    float = Field(0.0, description="Repairs and maintenance")
+    financial_costs:            float = Field(0.0, description="Financial costs / mortgage interest")
+    professional_fees:          float = Field(0.0, description="Professional fees")
+    cost_of_services:           float = Field(0.0, description="Cost of services")
+    other_expenses:             float = Field(0.0, description="Other allowable expenses → other")
+    residential_financial_cost: float = Field(0.0, description="Residential financial cost")
+    travel_costs:               float = Field(0.0, description="Travel costs")
 
 
-@router.post("/submit-periodic", tags=["Property Business — Period Summaries"])
-async def submit_periodic(
-    amounts: PeriodicAmountsBody,
-    request: Request,
-    x_session_id: Optional[str] = Header(None),
-    business_id: str = Query(
-        ...,
-        alias="businessId",
-        description="businessId from GET /business-details (e.g. XAIS12345678901)",
-    ),
-    start_date: str = Query(
-        ...,
-        alias="startDate",
-        description="Period start YYYY-MM-DD — must match obligation periodStartDate",
-    ),
-    end_date: str = Query(
-        ...,
-        alias="endDate",
-        description="Period end YYYY-MM-DD — must match obligation periodEndDate",
-    ),
-    tax_year: Optional[str] = Query(
-        None,
-        alias="taxYear",
-        description="HMRC tax year e.g. '2024-25'. Auto-derived from startDate if omitted.",
-    ),
-    property_type: str = Query(
-        "ukNonFhlProperty",
-        alias="propertyType",
-        description="'ukNonFhlProperty' (standard BTL) or 'ukFhlProperty' (FHL)",
-    ),
-    submission_id: Optional[str] = Query(
-        None,
-        alias="submissionId",
-        description="Provide to amend an existing submission. Omit to create a new one.",
-    ),
-):
-    """
-    Create or amend a cumulative year-to-date UK property income & expense return.
-
-    **Routing parameters** (shown above): businessId, startDate, endDate, taxYear, propertyType, submissionId.
-    **Financial amounts** (in the request body): all income and expense figures — all cumulative YTD.
-
-    Workflow:
-      1. `GET /obligations` → copy `periodStartDate` → `startDate`, `periodEndDate` → `endDate`
-      2. Fill in all YTD income and expense totals in the request body
-      3. No submissionId → creates new; provide submissionId → amends existing
-
-    HMRC endpoint (create): POST /individuals/business/property/uk/{nino}/{bid}/period/{ty}  (v6.0)
-    HMRC endpoint (amend):  PUT  /individuals/business/property/uk/{nino}/{bid}/period/{ty}/{sid}  (v6.0)
-    """
-    session_id = _require_session(x_session_id)
-    tokens, nino = _require_nino(session_id)
-
-    resolved_tax_year = tax_year or derive_tax_year(start_date)
-
+def _uk_period_income_expenses(amounts: PeriodicAmountsBody) -> tuple[dict, dict]:
     income = {
         "periodAmount":         round(amounts.rent_income, 2),
         "premiumsOfLeaseGrant": round(amounts.premiums_of_lease_grant, 2),
@@ -422,43 +370,202 @@ async def submit_periodic(
         "residentialFinancialCost": round(amounts.residential_financial_cost, 2),
         "travelCosts":              round(amounts.travel_costs, 2),
     }
+    return income, expenses
 
+
+HMRC_FOREIGN_PERIOD_CREATE_EXAMPLE = {
+    "fromDate": "2024-04-06",
+    "toDate": "2024-07-05",
+    "foreignNonFhlProperty": [
+        {
+            "countryCode": "FRA",
+            "income": {
+                "rentIncome": {"rentAmount": 5000.99},
+                "foreignTaxCreditRelief": False,
+                "premiumsOfLeaseGrant": 5000.99,
+                "otherPropertyIncome": 5000.99,
+                "foreignTaxPaidOrDeducted": 5000.99,
+                "specialWithholdingTaxOrUkTaxPaid": 5000.99,
+            },
+            "expenses": {
+                "premisesRunningCosts": 5000.99,
+                "repairsAndMaintenance": 5000.99,
+                "financialCosts": 5000.99,
+                "professionalFees": 5000.99,
+                "costOfServices": 5000.99,
+                "travelCosts": 5000.99,
+                "residentialFinancialCost": 5000.99,
+                "broughtFwdResidentialFinancialCost": 5000.99,
+                "other": 5000.99,
+            },
+        }
+    ],
+}
+
+HMRC_FOREIGN_PERIOD_AMEND_EXAMPLE = {
+    "foreignNonFhlProperty": [
+        {
+            "countryCode": "FRA",
+            "income": {
+                "rentIncome": {"rentAmount": 440.31},
+                "foreignTaxCreditRelief": False,
+                "premiumsOfLeaseGrant": 950.48,
+                "otherPropertyIncome": 802.49,
+                "foreignTaxPaidOrDeducted": 734.18,
+                "specialWithholdingTaxOrUkTaxPaid": 85.47,
+            },
+            "expenses": {
+                "premisesRunningCosts": 129.35,
+                "repairsAndMaintenance": 7490.32,
+                "financialCosts": 5000.99,
+                "professionalFees": 847.90,
+                "travelCosts": 69.20,
+                "costOfServices": 478.23,
+                "residentialFinancialCost": 879.28,
+                "broughtFwdResidentialFinancialCost": 846.13,
+                "other": 138.92,
+            },
+        }
+    ],
+}
+
+
+@router.post("/submit-periodic", tags=["Property Business — Period Summaries"])
+async def submit_periodic(
+    amounts: PeriodicAmountsBody,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="uk-property businessId from GET /business-details",
+    ),
+    start_date: str = Query(
+        ...,
+        alias="startDate",
+        description="Period start YYYY-MM-DD — must match obligation periodStartDate",
+    ),
+    end_date: str = Query(
+        ...,
+        alias="endDate",
+        description="Period end YYYY-MM-DD — must match obligation periodEndDate",
+    ),
+    tax_year: Optional[str] = Query(
+        None,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25' (≤ 2024-25). Auto-derived from startDate if omitted.",
+    ),
+    property_type: str = Query(
+        "ukNonFhlProperty",
+        alias="propertyType",
+        description="'ukNonFhlProperty' (standard BTL) or 'ukFhlProperty' (FHL)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Create a UK property income & expenses period summary (tax years ≤ 2024-25).
+
+    From 2025-26 use PUT /property-cumulative instead.
+    To amend an existing submission use PUT /period-summary.
+
+    HMRC endpoint:
+        POST /individuals/business/property/uk/{nino}/{businessId}/period/{taxYear}  (v6.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+
+    resolved_tax_year = tax_year or derive_tax_year(start_date)
+    assert_tax_year_at_most(resolved_tax_year)
+
+    income, expenses = _uk_period_income_expenses(amounts)
     client = await _build_client(request, session_id)
-
-    if submission_id:
-        result = await client.amend_period_summary(
-            nino=nino,
-            business_id=business_id,
-            tax_year=resolved_tax_year,
-            submission_id=submission_id,
-            from_date=start_date,
-            to_date=end_date,
-            income=income,
-            expenses=expenses,
-            property_type=property_type,
-        )
-        action = "amended"
-    else:
-        result = await client.create_period_summary(
-            nino=nino,
-            business_id=business_id,
-            tax_year=resolved_tax_year,
-            from_date=start_date,
-            to_date=end_date,
-            income=income,
-            expenses=expenses,
-            property_type=property_type,
-        )
-        action = "created"
-
+    result = await client.create_period_summary(
+        nino=nino,
+        business_id=business_id,
+        tax_year=resolved_tax_year,
+        from_date=start_date,
+        to_date=end_date,
+        income=income,
+        expenses=expenses,
+        property_type=property_type,
+        gov_test_scenario=gov_test_scenario,
+    )
     return {
         "success":    True,
-        "action":     action,
+        "action":     "created",
         "taxYear":    resolved_tax_year,
         "fromDate":   start_date,
         "toDate":     end_date,
         "businessId": business_id,
         "result":     result,
+    }
+
+
+@router.put("/period-summary", tags=["Property Business — Period Summaries"])
+async def amend_period_summary(
+    amounts: PeriodicAmountsBody,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="uk-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25' (≤ 2024-25)",
+    ),
+    submission_id: str = Query(
+        ...,
+        alias="submissionId",
+        description="submissionId from POST /submit-periodic or GET /period-summaries",
+    ),
+    property_type: str = Query(
+        "ukNonFhlProperty",
+        alias="propertyType",
+        description="'ukNonFhlProperty' or 'ukFhlProperty'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Amend a UK property income & expenses period summary (tax years ≤ 2024-25).
+
+    Amend body does not include fromDate/toDate (period dates are fixed at create).
+
+    HMRC endpoint:
+        PUT /individuals/business/property/uk/{nino}/{businessId}/period/{taxYear}/{submissionId}  (v6.0)
+    """
+    assert_tax_year_at_most(tax_year)
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    income, expenses = _uk_period_income_expenses(amounts)
+    client = await _build_client(request, session_id)
+    result = await client.amend_period_summary(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        submission_id=submission_id,
+        income=income,
+        expenses=expenses,
+        property_type=property_type,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":      True,
+        "action":       "amended",
+        "taxYear":      tax_year,
+        "businessId":   business_id,
+        "submissionId": submission_id,
+        "result":       result,
     }
 
 
@@ -877,49 +984,48 @@ async def withdraw_late_accounting_date_rule(
 # ── Annual Submission ─────────────────────────────────────────────────────────────
 
 
-HMRC_ANNUAL_SUBMISSION_EXAMPLE = {
-    "submittedOn": "2020-06-17T10:59:47.544Z",
-    "foreignFhlEea": {
-        "adjustments": {
-            "privateUseAdjustment": 34343.45,
-            "balancingCharge": 53543.23,
-            "periodOfGraceAdjustment": True,
-        },
+# UK annual — TY 2025-26+ (ukProperty only; FHL merged into UK property from 2025-26)
+HMRC_UK_ANNUAL_SUBMISSION_EXAMPLE = {
+    "ukProperty": {
         "allowances": {
-            "annualInvestmentAllowance": 3434.23,
-            "otherCapitalAllowance": 1343.34,
-            "electricChargePointAllowance": 6565.45,
-            "zeroEmissionsCarAllowance": 3456.34,
+            "propertyIncomeAllowance": 678.45,
+        },
+        "adjustments": {
+            "balancingCharge": 565.34,
+            "businessPremisesRenovationAllowanceBalancingCharges": 563.34,
+            "nonResidentLandlord": True,
+            "rentARoom": {
+                "jointlyLet": True,
+            },
         },
     },
+}
+
+# Foreign annual — TY 2025-26 (countryCode). For 2026-27+ use propertyId instead of countryCode.
+HMRC_FOREIGN_ANNUAL_SUBMISSION_EXAMPLE = {
     "foreignProperty": [
         {
-            "countryCode": "LBN",
+            "countryCode": "FRA",
             "adjustments": {
-                "privateUseAdjustment": 4553.34,
                 "balancingCharge": 3453.34,
             },
             "allowances": {
-                "annualInvestmentAllowance": 38330.95,
-                "costOfReplacingDomesticItems": 41985.17,
-                "zeroEmissionsGoodsVehicleAllowance": 9769.19,
-                "otherCapitalAllowance": 1049.21,
-                "electricChargePointAllowance": 3565.45,
-                "structuredBuildingAllowance": [
-                    {
-                        "amount": 3545.12,
-                        "firstYear": {
-                            "qualifyingDate": "2020-03-29",
-                            "qualifyingAmountExpenditure": 3453.34,
-                        },
-                        "building": {
-                            "name": "Blue Oaks",
-                            "number": "12",
-                            "postcode": "TF3 4GH",
-                        },
-                    }
-                ],
-                "zeroEmissionsCarAllowance": 3456.34,
+                "propertyIncomeAllowance": 200.25,
+            },
+        }
+    ],
+}
+
+# Foreign annual — TY 2026-27+ (propertyId from POST /foreign-property-details)
+HMRC_FOREIGN_ANNUAL_SUBMISSION_2026_EXAMPLE = {
+    "foreignProperty": [
+        {
+            "propertyId": "8e8b8450-dc1b-4360-8109-7067337b42cb",
+            "adjustments": {
+                "balancingCharge": 3453.34,
+            },
+            "allowances": {
+                "propertyIncomeAllowance": 200.25,
             },
         }
     ],
@@ -932,14 +1038,14 @@ async def submit_annual(
     body: dict = Body(
         ...,
         description=(
-            "HMRC annual property business submission body. "
-            "Pass the body exactly as HMRC documents for your tax year (e.g. ukProperty / foreignProperty, etc.)."
+            "HMRC UK property annual submission body. "
+            "For 2025-26+ use ukProperty only. "
+            "For ≤2024-25 you may send ukFhlProperty and/or ukProperty."
         ),
-        # FastAPI `examples` expects a LIST. Use `openapi_examples` for Swagger UI named examples.
         openapi_examples={
-            "hmrc_example": {
-                "summary": "HMRC example body",
-                "value": HMRC_ANNUAL_SUBMISSION_EXAMPLE,
+            "uk_2025_26_property_allowance": {
+                "summary": "UK propertyIncomeAllowance (TY 2025-26+)",
+                "value": HMRC_UK_ANNUAL_SUBMISSION_EXAMPLE,
             }
         },
     ),
@@ -947,20 +1053,21 @@ async def submit_annual(
     business_id: str = Query(
         ...,
         alias="businessId",
-        description="businessId from GET /business-details",
+        description="uk-property businessId from GET /business-details",
     ),
     tax_year: str = Query(
         ...,
         alias="taxYear",
-        description="HMRC tax year e.g. '2024-25'",
+        description="HMRC tax year e.g. '2025-26'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
     ),
 ):
     """
     Create or amend the annual UK property business allowances and adjustments.
-
-    **Routing parameters** (shown above): businessId, taxYear.\n
-    **Request body**: pass the HMRC-shaped payload. Swagger shows a default example from HMRC docs.\n
-    Note: NINO is taken from the session (POST /auth/set-nino), so it is not a parameter here.
 
     HMRC endpoint:
         PUT /individuals/business/property/uk/{nino}/{businessId}/annual/{taxYear}  (v6.0)
@@ -974,6 +1081,7 @@ async def submit_annual(
         business_id=business_id,
         tax_year=tax_year,
         body=body,
+        gov_test_scenario=gov_test_scenario,
     )
     return {"success": True, "taxYear": tax_year, "businessId": business_id, "result": result}
 
@@ -985,27 +1093,24 @@ async def get_annual_submission(
     business_id: str = Query(
         ...,
         alias="businessId",
-        description="businessId from GET /business-details (e.g. XAIS12345678901)",
+        description="uk-property businessId from GET /business-details",
     ),
     tax_year: str = Query(
         ...,
         alias="taxYear",
-        description="HMRC tax year e.g. '2024-25'",
+        description="HMRC tax year e.g. '2025-26'",
     ),
     gov_test_scenario: Optional[str] = Query(
         None,
         alias="govTestScenario",
         description=(
-            "Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. UK_PROPERTY, STATEFUL). "
+            "Sandbox-only. Sets HMRC Gov-Test-Scenario header (e.g. STATEFUL). "
             "Omit in production."
         ),
     ),
 ):
     """
     Retrieve an existing UK property business annual submission (allowances & adjustments).
-
-    Use after PUT /submit-annual to confirm what was submitted, or to fetch the
-    current values before amending them.
 
     HMRC endpoint:
         GET /individuals/business/property/uk/{nino}/{businessId}/annual/{taxYear}  (v6.0)
@@ -1028,6 +1133,156 @@ async def get_annual_submission(
     }
 
 
+@router.put("/foreign-annual", tags=["Property Business — Annual Submission"])
+async def submit_foreign_annual(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC foreign property annual submission body. "
+            "2025-26: foreignProperty[{countryCode,...}]. "
+            "2026-27+: foreignProperty[{propertyId,...}]. "
+            "≤2024-25 may include foreignFhlEea and/or foreignProperty with countryCode."
+        ),
+        openapi_examples={
+            "foreign_2025_26": {
+                "summary": "Foreign annual (TY 2025-26, countryCode)",
+                "value": HMRC_FOREIGN_ANNUAL_SUBMISSION_EXAMPLE,
+            },
+            "foreign_2026_27": {
+                "summary": "Foreign annual (TY 2026-27+, propertyId)",
+                "value": HMRC_FOREIGN_ANNUAL_SUBMISSION_2026_EXAMPLE,
+            },
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="foreign-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Create or amend a foreign property annual submission (allowances & adjustments).
+
+    HMRC endpoint:
+        PUT /individuals/business/property/foreign/{nino}/{businessId}/annual/{taxYear}  (v6.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    result = await client.amend_foreign_annual_submission(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {"success": True, "taxYear": tax_year, "businessId": business_id, "result": result}
+
+
+@router.get("/foreign-annual", tags=["Property Business — Annual Submission"])
+async def get_foreign_annual(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="foreign-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Retrieve a foreign property annual submission.
+
+    HMRC endpoint:
+        GET /individuals/business/property/foreign/{nino}/{businessId}/annual/{taxYear}  (v6.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    data = await client.get_foreign_annual_submission(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+@router.delete("/annual-submission", tags=["Property Business — Annual Submission"])
+async def delete_annual_submission(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="UK or foreign property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description=(
+            "Sandbox-only. Default (omit) simulates success. "
+            "STATEFUL requires a prior annual PUT. Omit in production."
+        ),
+    ),
+):
+    """
+    Delete a UK or Foreign property annual submission.
+
+    HMRC endpoint (shared path — no uk/foreign segment):
+        DELETE /individuals/business/property/{nino}/{businessId}/annual/{taxYear}  (v6.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    result = await client.delete_property_annual_submission(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "result":     result,
+    }
+
+
 @router.get("/period-summary", tags=["Property Business — Period Summaries"])
 async def get_period_summary(
     request: Request,
@@ -1035,17 +1290,17 @@ async def get_period_summary(
     business_id: str = Query(
         ...,
         alias="businessId",
-        description="businessId from GET /business-details",
+        description="uk-property businessId from GET /business-details",
     ),
     tax_year: str = Query(
         ...,
         alias="taxYear",
-        description="HMRC tax year e.g. '2024-25'",
+        description="HMRC tax year e.g. '2024-25' (≤ 2024-25)",
     ),
     submission_id: str = Query(
         ...,
         alias="submissionId",
-        description="submissionId returned by POST /submit-periodic",
+        description="submissionId from POST /submit-periodic or GET /period-summaries",
     ),
     gov_test_scenario: Optional[str] = Query(
         None,
@@ -1057,15 +1312,12 @@ async def get_period_summary(
     ),
 ):
     """
-    Retrieve an existing UK property income & expenses period summary.
-
-    Use this to inspect a previously created periodic submission.
-    The submissionId is returned by POST /submit-periodic and can also be
-    found in the obligations response.
+    Retrieve a UK property income & expenses period summary (tax years ≤ 2024-25).
 
     HMRC endpoint:
         GET /individuals/business/property/uk/{nino}/{businessId}/period/{taxYear}/{submissionId}  (v6.0)
     """
+    assert_tax_year_at_most(tax_year)
     session_id = _require_session(x_session_id)
     tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -1084,6 +1336,662 @@ async def get_period_summary(
         "submissionId": submission_id,
         **data,
     }
+
+
+@router.get("/period-summaries", tags=["Property Business — Period Summaries"])
+async def list_period_summaries(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="UK or foreign property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25' (≤ 2024-25)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    List property income & expenses period summaries (UK or foreign, ≤ 2024-25).
+
+    HMRC endpoint (shared path — no uk/foreign segment):
+        GET /individuals/business/property/{nino}/{businessId}/period/{taxYear}  (v6.0)
+    """
+    assert_tax_year_at_most(tax_year)
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+
+    data = await client.list_property_period_summaries(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+@router.post("/foreign-period", tags=["Property Business — Period Summaries"])
+async def create_foreign_period(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC foreign period create body: fromDate, toDate, and "
+            "foreignFhlEea and/or foreignNonFhlProperty[] (with countryCode)."
+        ),
+        openapi_examples={
+            "foreign_non_fhl": {
+                "summary": "Foreign non-FHL create (TY 2024-25)",
+                "value": HMRC_FOREIGN_PERIOD_CREATE_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="foreign-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25' (≤ 2024-25)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Create a foreign property income & expenses period summary (≤ 2024-25).
+
+    From 2025-26 use PUT /foreign-property-cumulative instead.
+
+    HMRC endpoint:
+        POST /individuals/business/property/foreign/{nino}/{businessId}/period/{taxYear}  (v6.0)
+    """
+    assert_tax_year_at_most(tax_year)
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.create_foreign_period_summary(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "action":     "created",
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "result":     result,
+    }
+
+
+@router.get("/foreign-period", tags=["Property Business — Period Summaries"])
+async def get_foreign_period(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="foreign-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25' (≤ 2024-25)",
+    ),
+    submission_id: str = Query(
+        ...,
+        alias="submissionId",
+        description="submissionId from POST /foreign-period or GET /period-summaries",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Retrieve a foreign property income & expenses period summary (≤ 2024-25).
+
+    HMRC endpoint:
+        GET /individuals/business/property/foreign/{nino}/{businessId}/period/{taxYear}/{submissionId}  (v6.0)
+    """
+    assert_tax_year_at_most(tax_year)
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.get_foreign_period_summary(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        submission_id=submission_id,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":         nino,
+        "businessId":   business_id,
+        "taxYear":      tax_year,
+        "submissionId": submission_id,
+        **data,
+    }
+
+
+@router.put("/foreign-period", tags=["Property Business — Period Summaries"])
+async def amend_foreign_period(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC foreign period amend body. Do not include fromDate/toDate. "
+            "Pass foreignFhlEea and/or foreignNonFhlProperty[]."
+        ),
+        openapi_examples={
+            "foreign_non_fhl": {
+                "summary": "Foreign non-FHL amend (TY 2024-25)",
+                "value": HMRC_FOREIGN_PERIOD_AMEND_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="foreign-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25' (≤ 2024-25)",
+    ),
+    submission_id: str = Query(
+        ...,
+        alias="submissionId",
+        description="submissionId from POST /foreign-period or GET /period-summaries",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Amend a foreign property income & expenses period summary (≤ 2024-25).
+
+    HMRC endpoint:
+        PUT /individuals/business/property/foreign/{nino}/{businessId}/period/{taxYear}/{submissionId}  (v6.0)
+    """
+    assert_tax_year_at_most(tax_year)
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.amend_foreign_period_summary(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        submission_id=submission_id,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":      True,
+        "action":       "amended",
+        "businessId":   business_id,
+        "taxYear":      tax_year,
+        "submissionId": submission_id,
+        "result":       result,
+    }
+
+
+# ── Historic UK Property (FHL / Non-FHL, 2017-18 to 2021-22) ───────────────────────
+# No businessId — NINO (+ taxYear or periodId) only.
+
+HMRC_HISTORIC_FHL_ANNUAL_EXAMPLE = {
+    "annualAdjustments": {
+        "lossBroughtForward": 200.00,
+        "balancingCharge": 200.00,
+        "privateUseAdjustment": 200.00,
+        "periodOfGraceAdjustment": True,
+        "businessPremisesRenovationAllowanceBalancingCharges": 200.02,
+        "nonResidentLandlord": True,
+        "rentARoom": {"jointlyLet": True},
+    },
+    "annualAllowances": {
+        "annualInvestmentAllowance": 200.00,
+        "otherCapitalAllowance": 200.00,
+        "businessPremisesRenovationAllowance": 100.02,
+        "propertyIncomeAllowance": 10.02,
+    },
+}
+
+HMRC_HISTORIC_NON_FHL_ANNUAL_EXAMPLE = {
+    "annualAdjustments": {
+        "lossBroughtForward": 200.00,
+        "balancingCharge": 200.00,
+        "privateUseAdjustment": 200.00,
+        "businessPremisesRenovationAllowanceBalancingCharges": 80.02,
+        "nonResidentLandlord": True,
+        "rentARoom": {"jointlyLet": True},
+    },
+    "annualAllowances": {
+        "annualInvestmentAllowance": 200.00,
+        "zeroEmissionGoodsVehicleAllowance": 200.00,
+        "businessPremisesRenovationAllowance": 200.00,
+        "otherCapitalAllowance": 200.00,
+        "costOfReplacingDomesticGoods": 200.00,
+        "propertyIncomeAllowance": 30.02,
+    },
+}
+
+HMRC_HISTORIC_FHL_PERIOD_CREATE_EXAMPLE = {
+    "fromDate": "2019-04-06",
+    "toDate": "2019-07-05",
+    "income": {
+        "periodAmount": 100.25,
+        "taxDeducted": 100.25,
+        "rentARoom": {"rentsReceived": 100.25},
+    },
+    "expenses": {
+        "premisesRunningCosts": 100.25,
+        "repairsAndMaintenance": 100.25,
+        "financialCosts": 100.25,
+        "professionalFees": 100.25,
+        "costOfServices": 100.25,
+        "other": 100.25,
+        "travelCosts": 100.25,
+        "rentARoom": {"amountClaimed": 100.25},
+    },
+}
+
+# HMRC amend schema uses singular premiseRunningCosts (create uses premisesRunningCosts).
+HMRC_HISTORIC_FHL_PERIOD_AMEND_EXAMPLE = {
+    "income": {
+        "periodAmount": 1123.45,
+        "taxDeducted": 2134.53,
+        "rentARoom": {"rentsReceived": 5167.56},
+    },
+    "expenses": {
+        "premiseRunningCosts": 5167.53,
+        "repairsAndMaintenance": 424.65,
+        "financialCosts": 853.56,
+        "professionalFees": 835.78,
+        "costOfServices": 978.34,
+        "other": 382.34,
+        "travelCosts": 145.56,
+        "rentARoom": {"amountClaimed": 945.9},
+    },
+}
+
+HMRC_HISTORIC_NON_FHL_PERIOD_CREATE_EXAMPLE = {
+    "fromDate": "2019-04-06",
+    "toDate": "2019-07-05",
+    "income": {
+        "periodAmount": 123.45,
+        "premiumsOfLeaseGrant": 2355.45,
+        "reversePremiums": 454.56,
+        "otherIncome": 567.89,
+        "taxDeducted": 234.53,
+        "rentARoom": {"rentsReceived": 567.56},
+    },
+    "expenses": {
+        "premisesRunningCosts": 567.53,
+        "repairsAndMaintenance": 324.65,
+        "financialCosts": 453.56,
+        "professionalFees": 535.78,
+        "costOfServices": 678.34,
+        "other": 682.34,
+        "travelCosts": 645.56,
+        "residentialFinancialCostsCarriedForward": 672.34,
+        "residentialFinancialCost": 1000.45,
+        "rentARoom": {"amountClaimed": 545.9},
+    },
+}
+
+HMRC_HISTORIC_NON_FHL_PERIOD_AMEND_EXAMPLE = {
+    "income": {
+        "periodAmount": 5000.99,
+        "premiumsOfLeaseGrant": 5000.99,
+        "reversePremiums": 5000.99,
+        "otherIncome": 5000.99,
+        "taxDeducted": 5000.99,
+        "rentARoom": {"rentsReceived": 5000.99},
+    },
+    "expenses": {
+        "premisesRunningCosts": 5000.99,
+        "repairsAndMaintenance": 5000.99,
+        "financialCosts": 5000.99,
+        "professionalFees": 5000.99,
+        "costOfServices": 5000.99,
+        "other": 5000.99,
+        "travelCosts": 5000.99,
+        "residentialFinancialCostsCarriedForward": 5000.99,
+        "residentialFinancialCost": 5000.99,
+        "rentARoom": {"amountClaimed": 5000.99},
+    },
+}
+
+
+@router.put("/historic-fhl-annual", tags=["Property Business — Historic"])
+async def put_historic_fhl_annual(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description="HMRC historic FHL annual body (annualAdjustments / annualAllowances).",
+        openapi_examples={
+            "fhl_annual": {
+                "summary": "Historic FHL annual (2017-18 to 2021-22)",
+                "value": HMRC_HISTORIC_FHL_ANNUAL_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(..., alias="taxYear", description="Tax year 2017-18 to 2021-22"),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """
+    Create/amend historic FHL UK property annual submission (2017-18 to 2021-22).
+
+    HMRC: PUT /individuals/business/property/uk/annual/furnished-holiday-lettings/{nino}/{taxYear}
+    """
+    assert_tax_year_in_range(tax_year)
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.amend_historic_fhl_annual(
+        nino=nino, tax_year=tax_year, body=body, gov_test_scenario=gov_test_scenario,
+    )
+    return {"success": True, "taxYear": tax_year, "result": result}
+
+
+@router.get("/historic-fhl-annual", tags=["Property Business — Historic"])
+async def get_historic_fhl_annual(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(..., alias="taxYear", description="Tax year 2017-18 to 2021-22"),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """HMRC: GET .../uk/annual/furnished-holiday-lettings/{nino}/{taxYear}"""
+    assert_tax_year_in_range(tax_year)
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.get_historic_fhl_annual(
+        nino=nino, tax_year=tax_year, gov_test_scenario=gov_test_scenario,
+    )
+    return {"nino": nino, "taxYear": tax_year, **data}
+
+
+@router.delete("/historic-fhl-annual", tags=["Property Business — Historic"])
+async def delete_historic_fhl_annual(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(..., alias="taxYear", description="Tax year 2017-18 to 2021-22"),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """HMRC: DELETE .../uk/annual/furnished-holiday-lettings/{nino}/{taxYear}"""
+    assert_tax_year_in_range(tax_year)
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.delete_historic_fhl_annual(
+        nino=nino, tax_year=tax_year, gov_test_scenario=gov_test_scenario,
+    )
+    return {"success": True, "taxYear": tax_year, "result": result}
+
+
+@router.put("/historic-non-fhl-annual", tags=["Property Business — Historic"])
+async def put_historic_non_fhl_annual(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description="HMRC historic Non-FHL annual body (annualAdjustments / annualAllowances).",
+        openapi_examples={
+            "non_fhl_annual": {
+                "summary": "Historic Non-FHL annual (2017-18 to 2021-22)",
+                "value": HMRC_HISTORIC_NON_FHL_ANNUAL_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(..., alias="taxYear", description="Tax year 2017-18 to 2021-22"),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """HMRC: PUT .../uk/annual/non-furnished-holiday-lettings/{nino}/{taxYear}"""
+    assert_tax_year_in_range(tax_year)
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.amend_historic_non_fhl_annual(
+        nino=nino, tax_year=tax_year, body=body, gov_test_scenario=gov_test_scenario,
+    )
+    return {"success": True, "taxYear": tax_year, "result": result}
+
+
+@router.get("/historic-non-fhl-annual", tags=["Property Business — Historic"])
+async def get_historic_non_fhl_annual(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(..., alias="taxYear", description="Tax year 2017-18 to 2021-22"),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """HMRC: GET .../uk/annual/non-furnished-holiday-lettings/{nino}/{taxYear}"""
+    assert_tax_year_in_range(tax_year)
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.get_historic_non_fhl_annual(
+        nino=nino, tax_year=tax_year, gov_test_scenario=gov_test_scenario,
+    )
+    return {"nino": nino, "taxYear": tax_year, **data}
+
+
+@router.delete("/historic-non-fhl-annual", tags=["Property Business — Historic"])
+async def delete_historic_non_fhl_annual(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(..., alias="taxYear", description="Tax year 2017-18 to 2021-22"),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """HMRC: DELETE .../uk/annual/non-furnished-holiday-lettings/{nino}/{taxYear}"""
+    assert_tax_year_in_range(tax_year)
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.delete_historic_non_fhl_annual(
+        nino=nino, tax_year=tax_year, gov_test_scenario=gov_test_scenario,
+    )
+    return {"success": True, "taxYear": tax_year, "result": result}
+
+
+@router.get("/historic-fhl-period", tags=["Property Business — Historic"])
+async def list_historic_fhl_periods(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """List historic FHL period summaries. HMRC: GET .../uk/period/furnished-holiday-lettings/{nino}"""
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.list_historic_fhl_periods(nino=nino, gov_test_scenario=gov_test_scenario)
+    return {"nino": nino, **data}
+
+
+@router.post("/historic-fhl-period", tags=["Property Business — Historic"])
+async def create_historic_fhl_period(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description="fromDate, toDate, income, expenses. Tax year inferred from dates (2017-18 to 2021-22).",
+        openapi_examples={
+            "fhl_period_create": {
+                "summary": "Historic FHL period create",
+                "value": HMRC_HISTORIC_FHL_PERIOD_CREATE_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """Create historic FHL period. Returns periodId. HMRC: POST .../furnished-holiday-lettings/{nino}"""
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.create_historic_fhl_period(
+        nino=nino, body=body, gov_test_scenario=gov_test_scenario,
+    )
+    return {"success": True, "action": "created", "result": result}
+
+
+@router.get("/historic-fhl-period/{period_id}", tags=["Property Business — Historic"])
+async def get_historic_fhl_period(
+    period_id: str,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """Retrieve historic FHL period. periodId e.g. 2019-04-06_2019-07-05"""
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.get_historic_fhl_period(
+        nino=nino, period_id=period_id, gov_test_scenario=gov_test_scenario,
+    )
+    return {"nino": nino, "periodId": period_id, **data}
+
+
+@router.put("/historic-fhl-period/{period_id}", tags=["Property Business — Historic"])
+async def amend_historic_fhl_period(
+    period_id: str,
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "income/expenses only — no fromDate/toDate. "
+            "Note: HMRC amend schema uses premiseRunningCosts (singular)."
+        ),
+        openapi_examples={
+            "fhl_period_amend": {
+                "summary": "Historic FHL period amend",
+                "value": HMRC_HISTORIC_FHL_PERIOD_AMEND_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """Amend historic FHL period. HMRC: PUT .../furnished-holiday-lettings/{nino}/{periodId}"""
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.amend_historic_fhl_period(
+        nino=nino, period_id=period_id, body=body, gov_test_scenario=gov_test_scenario,
+    )
+    return {"success": True, "action": "amended", "periodId": period_id, "result": result}
+
+
+@router.get("/historic-non-fhl-period", tags=["Property Business — Historic"])
+async def list_historic_non_fhl_periods(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """List historic Non-FHL period summaries. HMRC: GET .../non-furnished-holiday-lettings/{nino}"""
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.list_historic_non_fhl_periods(
+        nino=nino, gov_test_scenario=gov_test_scenario,
+    )
+    return {"nino": nino, **data}
+
+
+@router.post("/historic-non-fhl-period", tags=["Property Business — Historic"])
+async def create_historic_non_fhl_period(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description="fromDate, toDate, income, expenses. Tax year inferred from dates (2017-18 to 2021-22).",
+        openapi_examples={
+            "non_fhl_period_create": {
+                "summary": "Historic Non-FHL period create",
+                "value": HMRC_HISTORIC_NON_FHL_PERIOD_CREATE_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """Create historic Non-FHL period. Returns periodId."""
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.create_historic_non_fhl_period(
+        nino=nino, body=body, gov_test_scenario=gov_test_scenario,
+    )
+    return {"success": True, "action": "created", "result": result}
+
+
+@router.get("/historic-non-fhl-period/{period_id}", tags=["Property Business — Historic"])
+async def get_historic_non_fhl_period(
+    period_id: str,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """Retrieve historic Non-FHL period."""
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.get_historic_non_fhl_period(
+        nino=nino, period_id=period_id, gov_test_scenario=gov_test_scenario,
+    )
+    return {"nino": nino, "periodId": period_id, **data}
+
+
+@router.put("/historic-non-fhl-period/{period_id}", tags=["Property Business — Historic"])
+async def amend_historic_non_fhl_period(
+    period_id: str,
+    request: Request,
+    body: dict = Body(
+        ...,
+        description="income/expenses only — no fromDate/toDate.",
+        openapi_examples={
+            "non_fhl_period_amend": {
+                "summary": "Historic Non-FHL period amend",
+                "value": HMRC_HISTORIC_NON_FHL_PERIOD_AMEND_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
+):
+    """Amend historic Non-FHL period."""
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.amend_historic_non_fhl_period(
+        nino=nino, period_id=period_id, body=body, gov_test_scenario=gov_test_scenario,
+    )
+    return {"success": True, "action": "amended", "periodId": period_id, "result": result}
 
 
 # ── Debug / Validation (sandbox only) ────────────────────────────────────────────
@@ -1465,6 +2373,35 @@ HMRC_FOREIGN_PROPERTY_CUMULATIVE_EXAMPLE = {
     ],
 }
 
+HMRC_FOREIGN_PROPERTY_CUMULATIVE_2025_EXAMPLE = {
+    "fromDate": "2025-04-06",
+    "toDate": "2025-07-05",
+    "foreignProperty": [
+        {
+            "countryCode": "FRA",
+            "income": {
+                "rentIncome": {"rentAmount": 4882.23},
+                "foreignTaxCreditRelief": False,
+                "premiumsOfLeaseGrant": 884.72,
+                "otherPropertyIncome": 7713.09,
+                "foreignTaxPaidOrDeducted": 884.12,
+                "specialWithholdingTaxOrUkTaxPaid": 847.72,
+            },
+            "expenses": {
+                "premisesRunningCosts": 129.35,
+                "repairsAndMaintenance": 7490.32,
+                "financialCosts": 5000.99,
+                "professionalFees": 847.90,
+                "travelCosts": 69.20,
+                "costOfServices": 478.23,
+                "residentialFinancialCost": 879.28,
+                "broughtFwdResidentialFinancialCost": 846.13,
+                "other": 138.92,
+            },
+        }
+    ],
+}
+
 
 @router.put("/foreign-property-cumulative", tags=["Property Business — Foreign Cumulative"])
 async def submit_foreign_property_cumulative(
@@ -1477,10 +2414,14 @@ async def submit_foreign_property_cumulative(
             "For 2026-27+ each entry must include propertyId from Create Foreign Property Details."
         ),
         openapi_examples={
+            "hmrc_2025_26": {
+                "summary": "Full expenses (TY 2025-26, countryCode)",
+                "value": HMRC_FOREIGN_PROPERTY_CUMULATIVE_2025_EXAMPLE,
+            },
             "hmrc_2026_27": {
-                "summary": "Full expenses (TY 2026-27+)",
+                "summary": "Full expenses (TY 2026-27+, propertyId)",
                 "value": HMRC_FOREIGN_PROPERTY_CUMULATIVE_EXAMPLE,
-            }
+            },
         },
     ),
     x_session_id: Optional[str] = Header(None),

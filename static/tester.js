@@ -6,6 +6,8 @@ const STORAGE_KEYS = {
   apiBase: "hmrc_tester_api_base",
   oauthState: "hmrc_tester_oauth_state",
   lastPropertyId: "hmrc_tester_last_property_id",
+  lastSubmissionId: "hmrc_tester_last_submission_id",
+  lastPeriodId: "hmrc_tester_last_period_id",
 };
 
 /** Sensitive values use sessionStorage (cleared when the tab closes). */
@@ -246,21 +248,22 @@ const ENDPOINTS = [
     sampleBody: null,
   },
 
-  // Period Summaries (legacy)
+  // Period Summaries (≤ 2024-25; from 2025-26 use Cumulative)
   {
     id: "period-submit",
     group: "Property Business — Period Summaries",
-    name: "Create/amend period summary",
+    name: "Create UK period summary",
     method: "POST",
     path: "/submit-periodic",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
-      { key: "startDate", label: "startDate", default: "2025-04-06" },
-      { key: "endDate", label: "endDate", default: "2025-07-05" },
-      { key: "taxYear", label: "taxYear", default: "2025-26" },
+      { key: "startDate", label: "startDate", default: "2024-04-06" },
+      { key: "endDate", label: "endDate", default: "2024-07-05" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
       { key: "propertyType", label: "propertyType", default: "ukNonFhlProperty" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       rent_income: 1000,
@@ -279,19 +282,462 @@ const ENDPOINTS = [
     },
   },
   {
+    id: "period-amend",
+    group: "Property Business — Period Summaries",
+    name: "Amend UK period summary",
+    method: "PUT",
+    path: "/period-summary",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
+      { key: "submissionId", label: "submissionId", default: "" },
+      { key: "propertyType", label: "propertyType", default: "ukNonFhlProperty" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: {
+      rent_income: 1200,
+      premiums_of_lease_grant: 0,
+      reverse_premiums: 0,
+      other_income: 0,
+      tax_deducted: 0,
+      premises_running_costs: 100,
+      repairs_and_maintenance: 50,
+      financial_costs: 0,
+      professional_fees: 0,
+      cost_of_services: 0,
+      other_expenses: 0,
+      residential_financial_cost: 0,
+      travel_costs: 0,
+    },
+  },
+  {
     id: "period-get",
     group: "Property Business — Period Summaries",
-    name: "Retrieve period summary",
+    name: "Retrieve UK period summary",
     method: "GET",
     path: "/period-summary",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
-      { key: "taxYear", label: "taxYear", default: "2025-26" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
       { key: "submissionId", label: "submissionId", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
+  },
+  {
+    id: "period-list",
+    group: "Property Business — Period Summaries",
+    name: "List period summaries (UK or foreign)",
+    method: "GET",
+    path: "/period-summaries",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "foreign-period-create",
+    group: "Property Business — Period Summaries",
+    name: "Create foreign period summary",
+    method: "POST",
+    path: "/foreign-period",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: {
+      fromDate: "2024-04-06",
+      toDate: "2024-07-05",
+      foreignNonFhlProperty: [
+        {
+          countryCode: "FRA",
+          income: {
+            rentIncome: { rentAmount: 5000.99 },
+            foreignTaxCreditRelief: false,
+            premiumsOfLeaseGrant: 5000.99,
+            otherPropertyIncome: 5000.99,
+            foreignTaxPaidOrDeducted: 5000.99,
+            specialWithholdingTaxOrUkTaxPaid: 5000.99,
+          },
+          expenses: {
+            premisesRunningCosts: 5000.99,
+            repairsAndMaintenance: 5000.99,
+            financialCosts: 5000.99,
+            professionalFees: 5000.99,
+            costOfServices: 5000.99,
+            travelCosts: 5000.99,
+            residentialFinancialCost: 5000.99,
+            broughtFwdResidentialFinancialCost: 5000.99,
+            other: 5000.99,
+          },
+        },
+      ],
+    },
+  },
+  {
+    id: "foreign-period-get",
+    group: "Property Business — Period Summaries",
+    name: "Retrieve foreign period summary",
+    method: "GET",
+    path: "/foreign-period",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
+      { key: "submissionId", label: "submissionId", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "foreign-period-amend",
+    group: "Property Business — Period Summaries",
+    name: "Amend foreign period summary",
+    method: "PUT",
+    path: "/foreign-period",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
+      { key: "submissionId", label: "submissionId", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: {
+      foreignNonFhlProperty: [
+        {
+          countryCode: "FRA",
+          income: {
+            rentIncome: { rentAmount: 440.31 },
+            foreignTaxCreditRelief: false,
+            premiumsOfLeaseGrant: 950.48,
+            otherPropertyIncome: 802.49,
+            foreignTaxPaidOrDeducted: 734.18,
+            specialWithholdingTaxOrUkTaxPaid: 85.47,
+          },
+          expenses: {
+            premisesRunningCosts: 129.35,
+            repairsAndMaintenance: 7490.32,
+            financialCosts: 5000.99,
+            professionalFees: 847.9,
+            travelCosts: 69.2,
+            costOfServices: 478.23,
+            residentialFinancialCost: 879.28,
+            broughtFwdResidentialFinancialCost: 846.13,
+            other: 138.92,
+          },
+        },
+      ],
+    },
+  },
+
+  // Historic FHL / Non-FHL (2017-18 to 2021-22; no businessId)
+  {
+    id: "hist-fhl-annual-put",
+    group: "Property Business — Historic",
+    name: "Create/amend historic FHL annual",
+    method: "PUT",
+    path: "/historic-fhl-annual",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "taxYear", label: "taxYear", default: "2021-22" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: {
+      annualAdjustments: {
+        lossBroughtForward: 200,
+        balancingCharge: 200,
+        privateUseAdjustment: 200,
+        periodOfGraceAdjustment: true,
+        businessPremisesRenovationAllowanceBalancingCharges: 200.02,
+        nonResidentLandlord: true,
+        rentARoom: { jointlyLet: true },
+      },
+      annualAllowances: {
+        annualInvestmentAllowance: 200,
+        otherCapitalAllowance: 200,
+        businessPremisesRenovationAllowance: 100.02,
+        propertyIncomeAllowance: 10.02,
+      },
+    },
+  },
+  {
+    id: "hist-fhl-annual-get",
+    group: "Property Business — Historic",
+    name: "Retrieve historic FHL annual",
+    method: "GET",
+    path: "/historic-fhl-annual",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "taxYear", label: "taxYear", default: "2021-22" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "hist-fhl-annual-delete",
+    group: "Property Business — Historic",
+    name: "Delete historic FHL annual",
+    method: "DELETE",
+    path: "/historic-fhl-annual",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "taxYear", label: "taxYear", default: "2021-22" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "hist-non-fhl-annual-put",
+    group: "Property Business — Historic",
+    name: "Create/amend historic Non-FHL annual",
+    method: "PUT",
+    path: "/historic-non-fhl-annual",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "taxYear", label: "taxYear", default: "2021-22" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: {
+      annualAdjustments: {
+        lossBroughtForward: 200,
+        balancingCharge: 200,
+        privateUseAdjustment: 200,
+        businessPremisesRenovationAllowanceBalancingCharges: 80.02,
+        nonResidentLandlord: true,
+        rentARoom: { jointlyLet: true },
+      },
+      annualAllowances: {
+        annualInvestmentAllowance: 200,
+        zeroEmissionGoodsVehicleAllowance: 200,
+        businessPremisesRenovationAllowance: 200,
+        otherCapitalAllowance: 200,
+        costOfReplacingDomesticGoods: 200,
+        propertyIncomeAllowance: 30.02,
+      },
+    },
+  },
+  {
+    id: "hist-non-fhl-annual-get",
+    group: "Property Business — Historic",
+    name: "Retrieve historic Non-FHL annual",
+    method: "GET",
+    path: "/historic-non-fhl-annual",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "taxYear", label: "taxYear", default: "2021-22" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "hist-non-fhl-annual-delete",
+    group: "Property Business — Historic",
+    name: "Delete historic Non-FHL annual",
+    method: "DELETE",
+    path: "/historic-non-fhl-annual",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "taxYear", label: "taxYear", default: "2021-22" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "hist-fhl-period-list",
+    group: "Property Business — Historic",
+    name: "List historic FHL periods",
+    method: "GET",
+    path: "/historic-fhl-period",
+    needsSession: true,
+    needsNino: true,
+    params: [{ key: "govTestScenario", label: "govTestScenario", default: "" }],
+    sampleBody: null,
+  },
+  {
+    id: "hist-fhl-period-create",
+    group: "Property Business — Historic",
+    name: "Create historic FHL period",
+    method: "POST",
+    path: "/historic-fhl-period",
+    needsSession: true,
+    needsNino: true,
+    params: [{ key: "govTestScenario", label: "govTestScenario", default: "" }],
+    sampleBody: {
+      fromDate: "2019-04-06",
+      toDate: "2019-07-05",
+      income: {
+        periodAmount: 100.25,
+        taxDeducted: 100.25,
+        rentARoom: { rentsReceived: 100.25 },
+      },
+      expenses: {
+        premisesRunningCosts: 100.25,
+        repairsAndMaintenance: 100.25,
+        financialCosts: 100.25,
+        professionalFees: 100.25,
+        costOfServices: 100.25,
+        other: 100.25,
+        travelCosts: 100.25,
+        rentARoom: { amountClaimed: 100.25 },
+      },
+    },
+  },
+  {
+    id: "hist-fhl-period-get",
+    group: "Property Business — Historic",
+    name: "Retrieve historic FHL period",
+    method: "GET",
+    path: "/historic-fhl-period/{periodId}",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "periodId", label: "periodId (path)", default: "2019-04-06_2019-07-05", inPath: true },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "hist-fhl-period-amend",
+    group: "Property Business — Historic",
+    name: "Amend historic FHL period",
+    method: "PUT",
+    path: "/historic-fhl-period/{periodId}",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "periodId", label: "periodId (path)", default: "2019-04-06_2019-07-05", inPath: true },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: {
+      income: {
+        periodAmount: 1123.45,
+        taxDeducted: 2134.53,
+        rentARoom: { rentsReceived: 5167.56 },
+      },
+      expenses: {
+        premiseRunningCosts: 5167.53,
+        repairsAndMaintenance: 424.65,
+        financialCosts: 853.56,
+        professionalFees: 835.78,
+        costOfServices: 978.34,
+        other: 382.34,
+        travelCosts: 145.56,
+        rentARoom: { amountClaimed: 945.9 },
+      },
+    },
+  },
+  {
+    id: "hist-non-fhl-period-list",
+    group: "Property Business — Historic",
+    name: "List historic Non-FHL periods",
+    method: "GET",
+    path: "/historic-non-fhl-period",
+    needsSession: true,
+    needsNino: true,
+    params: [{ key: "govTestScenario", label: "govTestScenario", default: "" }],
+    sampleBody: null,
+  },
+  {
+    id: "hist-non-fhl-period-create",
+    group: "Property Business — Historic",
+    name: "Create historic Non-FHL period",
+    method: "POST",
+    path: "/historic-non-fhl-period",
+    needsSession: true,
+    needsNino: true,
+    params: [{ key: "govTestScenario", label: "govTestScenario", default: "" }],
+    sampleBody: {
+      fromDate: "2019-04-06",
+      toDate: "2019-07-05",
+      income: {
+        periodAmount: 123.45,
+        premiumsOfLeaseGrant: 2355.45,
+        reversePremiums: 454.56,
+        otherIncome: 567.89,
+        taxDeducted: 234.53,
+        rentARoom: { rentsReceived: 567.56 },
+      },
+      expenses: {
+        premisesRunningCosts: 567.53,
+        repairsAndMaintenance: 324.65,
+        financialCosts: 453.56,
+        professionalFees: 535.78,
+        costOfServices: 678.34,
+        other: 682.34,
+        travelCosts: 645.56,
+        residentialFinancialCostsCarriedForward: 672.34,
+        residentialFinancialCost: 1000.45,
+        rentARoom: { amountClaimed: 545.9 },
+      },
+    },
+  },
+  {
+    id: "hist-non-fhl-period-get",
+    group: "Property Business — Historic",
+    name: "Retrieve historic Non-FHL period",
+    method: "GET",
+    path: "/historic-non-fhl-period/{periodId}",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "periodId", label: "periodId (path)", default: "2019-04-06_2019-07-05", inPath: true },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "hist-non-fhl-period-amend",
+    group: "Property Business — Historic",
+    name: "Amend historic Non-FHL period",
+    method: "PUT",
+    path: "/historic-non-fhl-period/{periodId}",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "periodId", label: "periodId (path)", default: "2019-04-06_2019-07-05", inPath: true },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: {
+      income: {
+        periodAmount: 5000.99,
+        premiumsOfLeaseGrant: 5000.99,
+        reversePremiums: 5000.99,
+        otherIncome: 5000.99,
+        taxDeducted: 5000.99,
+        rentARoom: { rentsReceived: 5000.99 },
+      },
+      expenses: {
+        premisesRunningCosts: 5000.99,
+        repairsAndMaintenance: 5000.99,
+        financialCosts: 5000.99,
+        professionalFees: 5000.99,
+        costOfServices: 5000.99,
+        other: 5000.99,
+        travelCosts: 5000.99,
+        residentialFinancialCostsCarriedForward: 5000.99,
+        residentialFinancialCost: 5000.99,
+        rentARoom: { amountClaimed: 5000.99 },
+      },
+    },
   },
 
   // UK Cumulative
@@ -342,11 +788,11 @@ const ENDPOINTS = [
     sampleBody: null,
   },
 
-  // Annual
+  // Annual (UK + Foreign + Delete)
   {
     id: "annual-put",
     group: "Property Business — Annual Submission",
-    name: "Create/amend annual submission",
+    name: "Create/amend UK annual",
     method: "PUT",
     path: "/submit-annual",
     needsSession: true,
@@ -358,13 +804,14 @@ const ENDPOINTS = [
     ],
     sampleBody: {
       ukProperty: {
-        adjustments: {
-          privateUseAdjustment: 0,
-          balancingCharge: 0,
-        },
         allowances: {
-          annualInvestmentAllowance: 0,
-          otherCapitalAllowance: 0,
+          propertyIncomeAllowance: 678.45,
+        },
+        adjustments: {
+          balancingCharge: 565.34,
+          businessPremisesRenovationAllowanceBalancingCharges: 563.34,
+          nonResidentLandlord: true,
+          rentARoom: { jointlyLet: true },
         },
       },
     },
@@ -372,8 +819,61 @@ const ENDPOINTS = [
   {
     id: "annual-get",
     group: "Property Business — Annual Submission",
-    name: "Retrieve annual submission",
+    name: "Retrieve UK annual",
     method: "GET",
+    path: "/annual-submission",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2025-26" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "foreign-annual-put",
+    group: "Property Business — Annual Submission",
+    name: "Create/amend foreign annual",
+    method: "PUT",
+    path: "/foreign-annual",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2025-26" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: {
+      foreignProperty: [
+        {
+          countryCode: "FRA",
+          adjustments: { balancingCharge: 3453.34 },
+          allowances: { propertyIncomeAllowance: 200.25 },
+        },
+      ],
+    },
+  },
+  {
+    id: "foreign-annual-get",
+    group: "Property Business — Annual Submission",
+    name: "Retrieve foreign annual",
+    method: "GET",
+    path: "/foreign-annual",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2025-26" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "annual-delete",
+    group: "Property Business — Annual Submission",
+    name: "Delete property annual (UK or foreign)",
+    method: "DELETE",
     path: "/annual-submission",
     needsSession: true,
     needsNino: true,
@@ -510,7 +1010,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       periodDates: {
@@ -552,7 +1052,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
   },
@@ -608,7 +1108,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "DELETE" },
     ],
     sampleBody: null,
   },
@@ -800,6 +1300,8 @@ function clearSavedData() {
   sessionStorage.removeItem(STORAGE_KEYS.nino);
   sessionStorage.removeItem(STORAGE_KEYS.oauthState);
   sessionStorage.removeItem(STORAGE_KEYS.lastPropertyId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastSubmissionId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastPeriodId);
   localStorage.removeItem(STORAGE_KEYS.sessionId);
   localStorage.removeItem(STORAGE_KEYS.nino);
   localStorage.removeItem(STORAGE_KEYS.oauthState);
@@ -859,8 +1361,12 @@ function selectEndpoint(id) {
       if (savedId) input.value = savedId;
     }
     if (p.key === "periodId") {
-      const savedPeriod = sessionGet("hmrc_tester_last_period_id");
+      const savedPeriod = sessionGet(STORAGE_KEYS.lastPeriodId);
       if (savedPeriod) input.value = savedPeriod;
+    }
+    if (p.key === "submissionId") {
+      const savedSub = sessionGet(STORAGE_KEYS.lastSubmissionId);
+      if (savedSub) input.value = savedSub;
     }
     label.appendChild(input);
     paramsEl.appendChild(label);
@@ -972,13 +1478,32 @@ async function runRequest() {
         }
       } catch (_) {}
     }
+    // Auto-store submissionId from property period creates
+    if ((ep.id === "period-submit" || ep.id === "foreign-period-create") && res.ok) {
+      try {
+        const data = JSON.parse(text);
+        const sid = data.submissionId || (data.result && data.result.submissionId);
+        if (sid) sessionSet(STORAGE_KEYS.lastSubmissionId, sid);
+      } catch (_) {}
+    }
     // Auto-store periodId from SE period create
     if (ep.id === "se-period-create" && res.ok) {
       try {
         const data = JSON.parse(text);
         if (data.periodId) {
-          sessionSet("hmrc_tester_last_period_id", data.periodId);
+          sessionSet(STORAGE_KEYS.lastPeriodId, data.periodId);
         }
+      } catch (_) {}
+    }
+    // Auto-store periodId from historic property period creates
+    if (
+      (ep.id === "hist-fhl-period-create" || ep.id === "hist-non-fhl-period-create") &&
+      res.ok
+    ) {
+      try {
+        const data = JSON.parse(text);
+        const pid = data.periodId || (data.result && data.result.periodId);
+        if (pid) sessionSet(STORAGE_KEYS.lastPeriodId, pid);
       } catch (_) {}
     }
   } catch (err) {
