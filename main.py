@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -68,7 +68,7 @@ OPENAPI_TAGS = [
         "name": "Business Details — Late Accounting Date Rule",
         "description": "Retrieve, disapply, and withdraw late accounting date rule elections",
     },
-    {"name": "Obligations", "description": "Income and expenditure obligations"},
+    {"name": "Obligations", "description": "Income & expenditure and final declaration obligations"},
     {
         "name": "Property Business — Period Summaries",
         "description": "Legacy UK property period create / retrieve / amend",
@@ -126,6 +126,7 @@ app.include_router(router)
 app.include_router(xero_router)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
+_TESTER_HTML = _STATIC_DIR / "tester.html"
 if _STATIC_DIR.is_dir():
     app.mount("/tester-assets", StaticFiles(directory=str(_STATIC_DIR)), name="tester_assets")
 
@@ -133,7 +134,12 @@ if _STATIC_DIR.is_dir():
 @app.get("/tester", tags=["Health"], include_in_schema=False)
 async def api_tester_page():
     """One-page HMRC sandbox re-test UI (Auth → pick endpoint → Run)."""
-    return FileResponse(_STATIC_DIR / "tester.html")
+    if not _TESTER_HTML.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Tester UI not available in this deployment.",
+        )
+    return FileResponse(_TESTER_HTML)
 
 
 # ── Auth routes (public, no X-Session-ID required) ───────────────────────────────

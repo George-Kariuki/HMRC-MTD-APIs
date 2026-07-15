@@ -20,7 +20,12 @@ from pydantic import BaseModel, Field
 
 from auth import get_valid_access_token
 from database import get_tokens, update_nino
-from hmrc_client import HMRCClient, assert_tax_year_at_least, derive_tax_year
+from hmrc_client import (
+    HMRCClient,
+    assert_tax_year_at_least,
+    derive_tax_year,
+    tax_year_start_year,
+)
 
 router = APIRouter()
 
@@ -255,6 +260,73 @@ async def obligations(
     }
 
 
+@router.get("/obligations/final-declaration", tags=["Obligations"])
+async def final_declaration_obligations(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: Optional[str] = Query(
+        None,
+        alias="taxYear",
+        description=(
+            "HMRC tax year e.g. '2025-26'. "
+            "Omit to return obligations from 4 years before the current tax year."
+        ),
+    ),
+    status: Optional[str] = Query(
+        None,
+        description=(
+            "HMRC: status. `open` or `fulfilled` (case-insensitive). "
+            "Omit to return obligations of both statuses."
+        ),
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Retrieve Income Tax (Self Assessment) Final Declaration obligations.
+
+    Formerly called crystallisation obligations. NINO comes from the session.
+
+    HMRC endpoint:  GET /obligations/details/{nino}/crystallisation  (v3.0)
+    """
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.get_final_declaration_obligations(
+        nino=nino,
+        tax_year=tax_year,
+        status=status,
+        gov_test_scenario=gov_test_scenario,
+    )
+
+    raw_obligations = data.get("obligations", [])
+    flat_obligations = []
+    for detail in raw_obligations:
+        start = detail.get("periodStartDate", "")
+        end = detail.get("periodEndDate", "")
+        flat_obligations.append({
+            "periodStartDate": start,
+            "periodEndDate":   end,
+            "dueDate":         detail.get("dueDate"),
+            "status":          detail.get("status"),
+            "receivedDate":    detail.get("receivedDate"),
+            "taxYear":         derive_tax_year(start) if start else None,
+        })
+
+    return {
+        "nino": nino,
+        "query": {
+            "taxYear": tax_year,
+            "status":  status,
+        },
+        "obligations": flat_obligations,
+        "count":       len(flat_obligations),
+    }
+
+
 # ── Periodic Submission ───────────────────────────────────────────────────────────
 
 class PeriodicAmountsBody(BaseModel):
@@ -447,12 +519,13 @@ async def periods_of_account(
 
 
 HMRC_PERIODS_OF_ACCOUNT_EXAMPLE = {
-    "periodsOfAccount": [
+    "periodsOfAccount": True,
+    "periodsOfAccountDates": [
         {
             "startDate": "2025-04-06",
-            "endDate": "2025-12-31",
+            "endDate": "2026-04-05",
         }
-    ]
+    ],
 }
 
 
@@ -563,7 +636,7 @@ async def update_periods_of_account(
     request: Request,
     body: dict = Body(
         ...,
-        description="HMRC periods-of-account body (periodsOfAccount array with startDate/endDate).",
+        description="HMRC periods-of-account body (periodsOfAccount boolean + periodsOfAccountDates array).",
         openapi_examples={
             "hmrc_example": {
                 "summary": "Single period of account",
@@ -1485,14 +1558,19 @@ async def get_foreign_property_cumulative(
         GET /individuals/business/property/foreign/{nino}/{businessId}/cumulative/{taxYear}  (v6.0)
     """
     assert_tax_year_at_least(tax_year)
+    if tax_year_start_year(tax_year) >= 2026 and not (property_id or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="propertyId is required for tax years 2026-27 and later.",
+        )
     session_id = _require_session(x_session_id)
-    tokens, nino = _require_nino(session_id)
+    _tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
     data = await client.retrieve_foreign_property_cumulative(
         nino=nino,
         business_id=business_id,
         tax_year=tax_year,
-        property_id=property_id,
+        property_id=(property_id or "").strip() or None,
         gov_test_scenario=gov_test_scenario,
     )
     return {

@@ -123,7 +123,7 @@ NINO is stored in the session — no need to pass it separately.
 | `GET /business-details/{businessId}/accounting-type` | `businessId` (path), `taxYear` (query, required), `govTestScenario` (optional) | Retrieve accounting type (CASH / ACCRUALS) — **use this instead of `accountingType` on list/retrieve** |
 | `PUT /business-details/{businessId}/accounting-type` | `businessId` (path), `taxYear` (query, required), body `{"accountingType":"CASH"\|"ACCRUALS"}` | Create or update accounting type (2025-26+, in-year updates allowed) |
 | `GET /business-details/{businessId}/periods-of-account` | `businessId` (path), `taxYear` (query, required) | Get valid accounting period windows |
-| `PUT /business-details/{businessId}/periods-of-account` | `businessId` (path), `taxYear` (query, required), body `periodsOfAccount` array | Create or update periods of account |
+| `PUT /business-details/{businessId}/periods-of-account` | `businessId` (path), `taxYear` (query, required), body `periodsOfAccount` + `periodsOfAccountDates` | Create or update periods of account |
 
 > **Accounting type:** HMRC removed `accountingType` from Retrieve Business Details (v2.0). Call `GET .../accounting-type?taxYear=` for the current value.
 
@@ -154,6 +154,7 @@ GET /business-details
 | Endpoint | Parameters | Description |
 |---|---|---|
 | `GET /obligations` | `typeOfBusiness`, `businessId`, `fromDate`, `toDate`, `status` (all optional query) | Retrieve income & expenditure obligations |
+| `GET /obligations/final-declaration` | `taxYear`, `status`, `govTestScenario` (all optional query) | Retrieve final declaration (crystallisation) obligations |
 
 `status` accepts `open` or `fulfilled` — omit to get both.
 
