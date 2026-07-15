@@ -663,6 +663,39 @@ class HMRCClient:
         _raise_for_hmrc_error(resp)
         return _json_or_empty(resp)
 
+    async def get_final_declaration_obligations(
+        self,
+        nino: str,
+        tax_year: Optional[str] = None,
+        status: Optional[str] = None,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /obligations/details/{nino}/crystallisation   (Accept v3.0)
+
+        Retrieves final declaration (crystallisation) obligations.
+        Optional query params: taxYear, status (open|fulfilled).
+        If taxYear is omitted, HMRC returns obligations from 4 years before
+        the current tax year through the current year.
+        """
+        params: dict = {}
+        if tax_year is not None and str(tax_year).strip() != "":
+            params["taxYear"] = tax_year.strip()
+        if status is not None and str(status).strip() != "":
+            params["status"] = status.strip().lower()
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/obligations/details/{nino}/crystallisation",
+                headers=self._headers(
+                    "3.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+                params=params or None,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
     # ── Property Business Period Summaries ────────────────────────────────────────
 
     async def create_period_summary(

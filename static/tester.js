@@ -5,7 +5,18 @@ const STORAGE_KEYS = {
   nino: "hmrc_tester_nino",
   apiBase: "hmrc_tester_api_base",
   oauthState: "hmrc_tester_oauth_state",
+  lastPropertyId: "hmrc_tester_last_property_id",
 };
+
+/** Sensitive values use sessionStorage (cleared when the tab closes). */
+function sessionGet(key) {
+  return sessionStorage.getItem(key) || "";
+}
+
+function sessionSet(key, value) {
+  if (value) sessionStorage.setItem(key, value);
+  else sessionStorage.removeItem(key);
+}
 
 const ENDPOINTS = [
   // Auth helpers (no X-Session-ID required except set-nino)
@@ -66,7 +77,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId (path)", default: "XAIS12345678901", inPath: true },
+      { key: "businessId", label: "businessId (path)", default: "XBIS12345678901", inPath: true },
     ],
     sampleBody: null,
   },
@@ -79,7 +90,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId (path)", default: "XAIS12345678901", inPath: true },
+      { key: "businessId", label: "businessId (path)", default: "XBIS12345678901", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -96,7 +107,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId (path)", default: "XAIS12345678901", inPath: true },
+      { key: "businessId", label: "businessId (path)", default: "XBIS12345678901", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -111,7 +122,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId (path)", default: "XAIS12345678901", inPath: true },
+      { key: "businessId", label: "businessId (path)", default: "XBIS12345678901", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -128,7 +139,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId (path)", default: "XAIS12345678901", inPath: true },
+      { key: "businessId", label: "businessId (path)", default: "XBIS12345678901", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
     ],
     sampleBody: null,
@@ -142,12 +153,15 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId (path)", default: "XAIS12345678901", inPath: true },
+      { key: "businessId", label: "businessId (path)", default: "XBIS12345678901", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
-      periodsOfAccount: [{ startDate: "2025-04-06", endDate: "2025-12-31" }],
+      periodsOfAccount: true,
+      periodsOfAccountDates: [
+        { startDate: "2025-04-06", endDate: "2026-04-05" },
+      ],
     },
   },
 
@@ -161,7 +175,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId (path)", default: "XAIS12345678901", inPath: true },
+      { key: "businessId", label: "businessId (path)", default: "XBIS12345678901", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2024-25" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -176,7 +190,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId (path)", default: "XAIS12345678901", inPath: true },
+      { key: "businessId", label: "businessId (path)", default: "XBIS12345678901", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2024-25" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -191,7 +205,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId (path)", default: "XAIS12345678901", inPath: true },
+      { key: "businessId", label: "businessId (path)", default: "XBIS12345678901", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2024-25" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -202,7 +216,7 @@ const ENDPOINTS = [
   {
     id: "obligations",
     group: "Obligations",
-    name: "Retrieve obligations",
+    name: "Retrieve income & expenditure obligations",
     method: "GET",
     path: "/obligations",
     needsSession: true,
@@ -213,6 +227,21 @@ const ENDPOINTS = [
       { key: "fromDate", label: "fromDate", default: "2025-04-06" },
       { key: "toDate", label: "toDate", default: "2026-04-05" },
       { key: "status", label: "status", default: "open" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "obligations-final-declaration",
+    group: "Obligations",
+    name: "Retrieve final declaration obligations",
+    method: "GET",
+    path: "/obligations/final-declaration",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "taxYear", label: "taxYear", default: "2025-26" },
+      { key: "status", label: "status", default: "open" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
   },
@@ -227,7 +256,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "startDate", label: "startDate", default: "2025-04-06" },
       { key: "endDate", label: "endDate", default: "2025-07-05" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
@@ -258,7 +287,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "submissionId", label: "submissionId", default: "" },
     ],
@@ -275,7 +304,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
     ],
@@ -306,7 +335,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
     ],
@@ -323,7 +352,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -349,7 +378,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -366,7 +395,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
       { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
     ],
@@ -384,7 +413,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
       { key: "propertyId", label: "propertyId", default: "" },
       { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
@@ -419,7 +448,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
       { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
     ],
@@ -461,7 +490,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
       { key: "propertyId", label: "propertyId", default: "8e8b8450-dc1b-4360-8109-7067337b42cb" },
       { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
@@ -479,7 +508,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
     ],
@@ -521,7 +550,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
     ],
@@ -536,7 +565,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -560,7 +589,7 @@ const ENDPOINTS = [
     needsSession: true,
     needsNino: true,
     params: [
-      { key: "businessId", label: "businessId", default: "XAIS12345678901" },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
@@ -605,19 +634,52 @@ function updateAuthChip() {
 }
 
 function persist() {
-  localStorage.setItem(STORAGE_KEYS.sessionId, $("sessionId").value.trim());
-  localStorage.setItem(STORAGE_KEYS.nino, $("nino").value.trim());
+  sessionSet(STORAGE_KEYS.sessionId, $("sessionId").value.trim());
+  sessionSet(STORAGE_KEYS.nino, $("nino").value.trim());
+  // API base is a non-sensitive preference — keep across reloads.
   localStorage.setItem(STORAGE_KEYS.apiBase, $("apiBase").value);
 }
 
 function restore() {
-  const sid = localStorage.getItem(STORAGE_KEYS.sessionId) || "";
-  const nino = localStorage.getItem(STORAGE_KEYS.nino) || "";
-  const base = localStorage.getItem(STORAGE_KEYS.apiBase) || "https://hmrc-mtd-ap-is.vercel.app";
+  // Prefer sessionStorage; clear any previously leaked localStorage credentials.
+  const sid =
+    sessionGet(STORAGE_KEYS.sessionId) ||
+    localStorage.getItem(STORAGE_KEYS.sessionId) ||
+    "";
+  const nino =
+    sessionGet(STORAGE_KEYS.nino) ||
+    localStorage.getItem(STORAGE_KEYS.nino) ||
+    "";
+  localStorage.removeItem(STORAGE_KEYS.sessionId);
+  localStorage.removeItem(STORAGE_KEYS.nino);
+
+  const base =
+    localStorage.getItem(STORAGE_KEYS.apiBase) ||
+    "https://hmrc-mtd-ap-is.vercel.app";
   $("sessionId").value = sid;
   $("nino").value = nino;
   $("apiBase").value = base;
+  if (sid) sessionSet(STORAGE_KEYS.sessionId, sid);
+  if (nino) sessionSet(STORAGE_KEYS.nino, nino);
   updateAuthChip();
+}
+
+function clearSavedData() {
+  if (pollTimer) clearInterval(pollTimer);
+  sessionStorage.removeItem(STORAGE_KEYS.sessionId);
+  sessionStorage.removeItem(STORAGE_KEYS.nino);
+  sessionStorage.removeItem(STORAGE_KEYS.oauthState);
+  sessionStorage.removeItem(STORAGE_KEYS.lastPropertyId);
+  localStorage.removeItem(STORAGE_KEYS.sessionId);
+  localStorage.removeItem(STORAGE_KEYS.nino);
+  localStorage.removeItem(STORAGE_KEYS.oauthState);
+  localStorage.removeItem(STORAGE_KEYS.lastPropertyId);
+  $("sessionId").value = "";
+  $("nino").value = "";
+  updateAuthChip();
+  $("respStatus").textContent = "Cleared";
+  $("respStatus").style.color = "var(--muted)";
+  $("respBody").textContent = "Session ID, NINO, OAuth state, and last propertyId cleared.";
 }
 
 function renderList() {
@@ -660,10 +722,11 @@ function selectEndpoint(id) {
     input.dataset.inPath = p.inPath ? "1" : "0";
     input.value = p.default || "";
     if (p.key === "state") {
-      input.value = localStorage.getItem(STORAGE_KEYS.oauthState) || "";
+      input.value = sessionGet(STORAGE_KEYS.oauthState);
     }
-    if (p.key === "nino" || (ep.id === "auth-set-nino" && false)) {
-      /* noop */
+    if (p.key === "propertyId") {
+      const savedId = sessionGet(STORAGE_KEYS.lastPropertyId);
+      if (savedId) input.value = savedId;
     }
     label.appendChild(input);
     paramsEl.appendChild(label);
@@ -677,6 +740,22 @@ function selectEndpoint(id) {
   if (ep.id === "auth-set-nino") {
     const n = $("nino").value.trim() || "AA123456A";
     $("epBody").value = JSON.stringify({ nino: n }, null, 2);
+  }
+
+  // Swap sample-body propertyId with last created id when present
+  if (hasBody) {
+    const savedId = sessionGet(STORAGE_KEYS.lastPropertyId);
+    if (savedId) {
+      try {
+        const body = JSON.parse($("epBody").value);
+        if (Array.isArray(body.foreignProperty)) {
+          for (const entry of body.foreignProperty) {
+            if (entry && typeof entry === "object") entry.propertyId = savedId;
+          }
+          $("epBody").value = JSON.stringify(body, null, 2);
+        }
+      } catch (_) {}
+    }
   }
 }
 
@@ -705,6 +784,13 @@ async function runRequest() {
   if (ep.needsSession && !sessionId) {
     $("respStatus").textContent = "Blocked";
     $("respBody").textContent = "Set a session ID first (Connect HMRC).";
+    return;
+  }
+
+  const nino = $("nino").value.trim();
+  if (ep.needsNino && !nino) {
+    $("respStatus").textContent = "Blocked";
+    $("respBody").textContent = "Set a NINO first (use the Set NINO button).";
     return;
   }
 
@@ -748,7 +834,7 @@ async function runRequest() {
       try {
         const data = JSON.parse(text);
         if (data.propertyId) {
-          localStorage.setItem("hmrc_tester_last_property_id", data.propertyId);
+          sessionSet(STORAGE_KEYS.lastPropertyId, data.propertyId);
         }
       } catch (_) {}
     }
@@ -769,7 +855,7 @@ async function connectHmrc() {
     if (!data.auth_url || !data.state) {
       throw new Error("Unexpected login-url response: " + JSON.stringify(data));
     }
-    localStorage.setItem(STORAGE_KEYS.oauthState, data.state);
+    sessionSet(STORAGE_KEYS.oauthState, data.state);
     window.open(data.auth_url, "_blank", "noopener");
     startPolling(data.state);
   } catch (err) {
@@ -851,13 +937,21 @@ function wire() {
   $("nino").addEventListener("input", persist);
   $("btnConnect").addEventListener("click", connectHmrc);
   $("btnSetNino").addEventListener("click", setNino);
+  $("btnClear").addEventListener("click", clearSavedData);
   $("btnRun").addEventListener("click", runRequest);
   $("btnReset").addEventListener("click", () => {
     if (selectedId) selectEndpoint(selectedId);
   });
 
   // Resume polling if a state was mid-flight
-  const pending = localStorage.getItem(STORAGE_KEYS.oauthState);
+  const pending =
+    sessionGet(STORAGE_KEYS.oauthState) ||
+    localStorage.getItem(STORAGE_KEYS.oauthState) ||
+    "";
+  if (pending) {
+    localStorage.removeItem(STORAGE_KEYS.oauthState);
+    sessionSet(STORAGE_KEYS.oauthState, pending);
+  }
   if (pending && !$("sessionId").value.trim()) {
     startPolling(pending);
   }
