@@ -105,7 +105,7 @@ async def set_nino(
 
 # ── Business Details ──────────────────────────────────────────────────────────────
 
-@router.get("/business-details", tags=["HMRC"])
+@router.get("/business-details", tags=["Business Details"])
 async def business_details(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -152,7 +152,7 @@ async def business_details(
 
 # ── Obligations ───────────────────────────────────────────────────────────────────
 
-@router.get("/obligations", tags=["HMRC"])
+@router.get("/obligations", tags=["Obligations"])
 async def obligations(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -278,7 +278,7 @@ class PeriodicAmountsBody(BaseModel):
     travel_costs:              float = Field(0.0, description="Travel costs (YTD)")
 
 
-@router.post("/submit-periodic", tags=["HMRC"])
+@router.post("/submit-periodic", tags=["Property Business — Period Summaries"])
 async def submit_periodic(
     amounts: PeriodicAmountsBody,
     request: Request,
@@ -392,7 +392,7 @@ async def submit_periodic(
 
 # ── Business Details — retrieve single business + periods of account ───────────────
 
-@router.get("/business-details/{business_id}", tags=["HMRC"])
+@router.get("/business-details/{business_id}", tags=["Business Details"])
 async def retrieve_business(
     business_id: str,
     request: Request,
@@ -414,7 +414,7 @@ async def retrieve_business(
     return {"nino": nino, "businessId": business_id, **data}
 
 
-@router.get("/business-details/{business_id}/periods-of-account", tags=["HMRC"])
+@router.get("/business-details/{business_id}/periods-of-account", tags=["Business Details — Periods of Account"])
 async def periods_of_account(
     business_id: str,
     request: Request,
@@ -456,7 +456,7 @@ HMRC_PERIODS_OF_ACCOUNT_EXAMPLE = {
 }
 
 
-@router.get("/business-details/{business_id}/accounting-type", tags=["HMRC"])
+@router.get("/business-details/{business_id}/accounting-type", tags=["Business Details — Accounting Type"])
 async def get_accounting_type(
     business_id: str,
     request: Request,
@@ -499,7 +499,7 @@ async def get_accounting_type(
     }
 
 
-@router.put("/business-details/{business_id}/accounting-type", tags=["HMRC"])
+@router.put("/business-details/{business_id}/accounting-type", tags=["Business Details — Accounting Type"])
 async def update_accounting_type(
     business_id: str,
     request: Request,
@@ -557,7 +557,7 @@ async def update_accounting_type(
     }
 
 
-@router.put("/business-details/{business_id}/periods-of-account", tags=["HMRC"])
+@router.put("/business-details/{business_id}/periods-of-account", tags=["Business Details — Periods of Account"])
 async def update_periods_of_account(
     business_id: str,
     request: Request,
@@ -600,6 +600,197 @@ async def update_periods_of_account(
         business_id=business_id,
         tax_year=tax_year,
         body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "result":     result,
+    }
+
+
+@router.put(
+    "/business-details/{business_id}/quarterly-period-type",
+    tags=["Business Details"],
+)
+async def create_amend_quarterly_period_type(
+    business_id: str,
+    request: Request,
+    body: dict = Body(
+        ...,
+        description='HMRC body: {"quarterlyPeriodType": "standard" | "calendar"}',
+        openapi_examples={
+            "standard": {
+                "summary": "Standard quarters (6 Apr – 5 Jul first period)",
+                "value": {"quarterlyPeriodType": "standard"},
+            },
+            "calendar": {
+                "summary": "Calendar quarters (1 Apr – 30 Jun first period)",
+                "value": {"quarterlyPeriodType": "calendar"},
+            },
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26' (current tax year only)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Create or amend the quarterly period type for a business in a tax year.
+
+    Cannot be changed after a submission has been made for that year.
+
+    HMRC endpoint:
+        PUT /individuals/business/details/{nino}/{businessId}/{taxYear}  (v2.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.create_amend_quarterly_period_type(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "result":     result,
+    }
+
+
+# ── Business Details — Late Accounting Date Rule ───────────────────────────────────
+
+@router.get(
+    "/business-details/{business_id}/late-accounting-date-rule-election",
+    tags=["Business Details — Late Accounting Date Rule"],
+)
+async def get_late_accounting_date_rule(
+    business_id: str,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25' (self-employment businessId only)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Retrieve the Late Accounting Date Rule election for a self-employment business.
+
+    HMRC endpoint:
+        GET /individuals/business/details/{nino}/{businessId}/{taxYear}/late-accounting-date-rule-election  (v2.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.retrieve_late_accounting_date_rule(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+@router.post(
+    "/business-details/{business_id}/late-accounting-date-rule-election/disapply",
+    tags=["Business Details — Late Accounting Date Rule"],
+)
+async def disapply_late_accounting_date_rule(
+    business_id: str,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year that has already ended",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Disapply the automatic Late Accounting Date Rule for a tax year (no request body).
+
+    Only valid after the tax year has ended.
+
+    HMRC endpoint:
+        POST .../late-accounting-date-rule-election/disapply  (v2.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.disapply_late_accounting_date_rule(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "result":     result,
+    }
+
+
+@router.delete(
+    "/business-details/{business_id}/late-accounting-date-rule-election/withdraw",
+    tags=["Business Details — Late Accounting Date Rule"],
+)
+async def withdraw_late_accounting_date_rule(
+    business_id: str,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year that has already ended",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Withdraw a Late Accounting Date Rule disapply election (no request body).
+
+    Only valid after the tax year has ended.
+
+    HMRC endpoint:
+        DELETE .../late-accounting-date-rule-election/withdraw  (v2.0)
+    """
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.withdraw_late_accounting_date_rule(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
         gov_test_scenario=gov_test_scenario,
     )
     return {
@@ -662,7 +853,7 @@ HMRC_ANNUAL_SUBMISSION_EXAMPLE = {
 }
 
 
-@router.put("/submit-annual", tags=["HMRC"])
+@router.put("/submit-annual", tags=["Property Business — Annual Submission"])
 async def submit_annual(
     request: Request,
     body: dict = Body(
@@ -714,7 +905,7 @@ async def submit_annual(
     return {"success": True, "taxYear": tax_year, "businessId": business_id, "result": result}
 
 
-@router.get("/annual-submission", tags=["HMRC"])
+@router.get("/annual-submission", tags=["Property Business — Annual Submission"])
 async def get_annual_submission(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -764,7 +955,7 @@ async def get_annual_submission(
     }
 
 
-@router.get("/period-summary", tags=["HMRC"])
+@router.get("/period-summary", tags=["Property Business — Period Summaries"])
 async def get_period_summary(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -880,7 +1071,7 @@ class PropertyIncomeBody(BaseModel):
     travel_costs: float               = Field(0.0, description="Travel costs (YTD)")
 
 
-@router.put("/property-cumulative", tags=["HMRC"])
+@router.put("/property-cumulative", tags=["Property Business — UK Cumulative"])
 async def submit_property_cumulative(
     amounts: PropertyIncomeBody,
     request: Request,
@@ -951,7 +1142,7 @@ async def submit_property_cumulative(
     }
 
 
-@router.get("/property-cumulative", tags=["HMRC"])
+@router.get("/property-cumulative", tags=["Property Business — UK Cumulative"])
 async def get_property_cumulative(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -982,6 +1173,326 @@ async def get_property_cumulative(
         nino=nino,
         business_id=business_id,
         tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+# ── Foreign Property Details (from 2026-27) ────────────────────────────────────────
+
+HMRC_FOREIGN_PROPERTY_DETAILS_CREATE_EXAMPLE = {
+    "propertyName": "Bob & Bobby Co",
+    "countryCode": "FRA",
+}
+
+HMRC_FOREIGN_PROPERTY_DETAILS_UPDATE_EXAMPLE = {
+    "propertyName": "Bob & Bobby Co",
+}
+
+
+@router.post("/foreign-property-details", tags=["Property Business — Foreign Property Details"])
+async def create_foreign_property_details(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC create body: propertyName + countryCode (ISO 3166-1 Alpha-3). "
+            "Optional endDate / endReason."
+        ),
+        openapi_examples={
+            "create": {
+                "summary": "Create foreign property details",
+                "value": HMRC_FOREIGN_PROPERTY_DETAILS_CREATE_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="foreign-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2026-27' (minimum 2026-27)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Create a foreign property details record. Returns propertyId (UUID).
+
+    HMRC endpoint:
+        POST /individuals/business/property/foreign/{nino}/{businessId}/details/{taxYear}  (v6.0)
+    """
+    assert_tax_year_at_least(tax_year, "2026-27")
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.create_foreign_property_details(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+@router.get("/foreign-property-details", tags=["Property Business — Foreign Property Details"])
+async def get_foreign_property_details(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="foreign-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2026-27' (minimum 2026-27)",
+    ),
+    property_id: Optional[str] = Query(
+        None,
+        alias="propertyId",
+        description="Optional UUID propertyId filter returned from create",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Retrieve foreign property details for a business / tax year.
+
+    HMRC endpoint:
+        GET /individuals/business/property/foreign/{nino}/{businessId}/details/{taxYear}  (v6.0)
+    """
+    assert_tax_year_at_least(tax_year, "2026-27")
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.retrieve_foreign_property_details(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        property_id=property_id,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+@router.put(
+    "/foreign-property-details/{property_id}",
+    tags=["Property Business — Foreign Property Details"],
+)
+async def update_foreign_property_details(
+    property_id: str,
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC update body: propertyName required. "
+            "Optional endDate / endReason (includes added-in-error)."
+        ),
+        openapi_examples={
+            "update": {
+                "summary": "Update property name",
+                "value": HMRC_FOREIGN_PROPERTY_DETAILS_UPDATE_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2026-27' (minimum 2026-27)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Update foreign property details by propertyId.
+
+    HMRC endpoint:
+        PUT /individuals/business/property/foreign/{nino}/details/{propertyId}/{taxYear}  (v6.0)
+    """
+    assert_tax_year_at_least(tax_year, "2026-27")
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.update_foreign_property_details(
+        nino=nino,
+        property_id=property_id,
+        tax_year=tax_year,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "propertyId": property_id,
+        "taxYear":    tax_year,
+        "result":     result,
+    }
+
+
+# ── Foreign Property Cumulative Period Summary ─────────────────────────────────────
+
+HMRC_FOREIGN_PROPERTY_CUMULATIVE_EXAMPLE = {
+    "fromDate": "2026-04-06",
+    "toDate": "2026-07-05",
+    "foreignProperty": [
+        {
+            "propertyId": "8e8b8450-dc1b-4360-8109-7067337b42cb",
+            "income": {
+                "rentIncome": {"rentAmount": 5000.99},
+                "foreignTaxCreditRelief": False,
+                "premiumsOfLeaseGrant": 12000.50,
+                "otherPropertyIncome": 3000.25,
+                "foreignTaxPaidOrDeducted": 1500.75,
+                "specialWithholdingTaxOrUkTaxPaid": 450.50,
+            },
+            "expenses": {
+                "premisesRunningCosts": 5000.99,
+                "repairsAndMaintenance": 2000.50,
+                "financialCosts": 1000.00,
+                "professionalFees": 750.75,
+                "travelCosts": 300.50,
+                "costOfServices": 4000.75,
+                "other": 600.00,
+                "residentialFinancialCost": 500.99,
+                "broughtFwdResidentialFinancialCost": 250.25,
+            },
+        }
+    ],
+}
+
+
+@router.put("/foreign-property-cumulative", tags=["Property Business — Foreign Cumulative"])
+async def submit_foreign_property_cumulative(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC foreign property cumulative body. "
+            "Pass fromDate/toDate and foreignProperty[] exactly as documented. "
+            "For 2026-27+ each entry must include propertyId from Create Foreign Property Details."
+        ),
+        openapi_examples={
+            "hmrc_2026_27": {
+                "summary": "Full expenses (TY 2026-27+)",
+                "value": HMRC_FOREIGN_PROPERTY_CUMULATIVE_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="foreign-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26' (minimum 2025-26)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Create or amend a foreign property cumulative income & expenses period summary.
+
+    HMRC endpoint:
+        PUT /individuals/business/property/foreign/{nino}/{businessId}/cumulative/{taxYear}  (v6.0)
+    """
+    assert_tax_year_at_least(tax_year)
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.create_or_amend_foreign_property_cumulative(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "action":     "created_or_amended",
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "result":     result,
+    }
+
+
+@router.get("/foreign-property-cumulative", tags=["Property Business — Foreign Cumulative"])
+async def get_foreign_property_cumulative(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="foreign-property businessId from GET /business-details",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26' (minimum 2025-26)",
+    ),
+    property_id: Optional[str] = Query(
+        None,
+        alias="propertyId",
+        description="propertyId filter — required for tax years 2026-27+",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Retrieve a foreign property cumulative period summary.
+
+    HMRC endpoint:
+        GET /individuals/business/property/foreign/{nino}/{businessId}/cumulative/{taxYear}  (v6.0)
+    """
+    assert_tax_year_at_least(tax_year)
+    session_id = _require_session(x_session_id)
+    tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.retrieve_foreign_property_cumulative(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        property_id=property_id,
         gov_test_scenario=gov_test_scenario,
     )
     return {
@@ -1042,7 +1553,7 @@ HMRC_SELF_EMPLOYMENT_CUMULATIVE_EXAMPLE = {
 }
 
 
-@router.put("/self-employment-cumulative", tags=["HMRC"])
+@router.put("/self-employment-cumulative", tags=["Self-Employment Business"])
 async def submit_self_employment_cumulative(
     request: Request,
     body: dict = Body(
@@ -1097,7 +1608,7 @@ async def submit_self_employment_cumulative(
     }
 
 
-@router.get("/self-employment-cumulative", tags=["HMRC"])
+@router.get("/self-employment-cumulative", tags=["Self-Employment Business"])
 async def get_self_employment_cumulative(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -1175,7 +1686,7 @@ HMRC_SELF_EMPLOYMENT_ANNUAL_EXAMPLE = {
 }
 
 
-@router.put("/self-employment-annual", tags=["HMRC"])
+@router.put("/self-employment-annual", tags=["Self-Employment Business"])
 async def submit_self_employment_annual(
     request: Request,
     body: dict = Body(
@@ -1240,7 +1751,7 @@ async def submit_self_employment_annual(
     }
 
 
-@router.get("/self-employment-annual", tags=["HMRC"])
+@router.get("/self-employment-annual", tags=["Self-Employment Business"])
 async def get_self_employment_annual(
     request: Request,
     x_session_id: Optional[str] = Header(None),

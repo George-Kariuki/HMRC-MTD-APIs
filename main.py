@@ -11,11 +11,13 @@ and Response objects cleanly.
 
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv(override=True)  # override=True ensures .env updates are picked up on reload
 
@@ -51,16 +53,63 @@ async def lifespan(app: FastAPI):
 
 # ── App factory ───────────────────────────────────────────────────────────────────
 
+OPENAPI_TAGS = [
+    {"name": "Auth", "description": "HMRC OAuth 2.0 and session / NINO binding"},
+    {"name": "Business Details", "description": "List / retrieve businesses and quarterly period type"},
+    {
+        "name": "Business Details — Accounting Type",
+        "description": "Retrieve and update accounting type (CASH / ACCRUALS)",
+    },
+    {
+        "name": "Business Details — Periods of Account",
+        "description": "Retrieve and create/update periods of account",
+    },
+    {
+        "name": "Business Details — Late Accounting Date Rule",
+        "description": "Retrieve, disapply, and withdraw late accounting date rule elections",
+    },
+    {"name": "Obligations", "description": "Income and expenditure obligations"},
+    {
+        "name": "Property Business — Period Summaries",
+        "description": "Legacy UK property period create / retrieve / amend",
+    },
+    {
+        "name": "Property Business — UK Cumulative",
+        "description": "UK property cumulative period summaries (from 2025-26)",
+    },
+    {
+        "name": "Property Business — Annual Submission",
+        "description": "UK property annual allowances and adjustments",
+    },
+    {
+        "name": "Property Business — Foreign Property Details",
+        "description": "Create / retrieve / update foreign property details (from 2026-27)",
+    },
+    {
+        "name": "Property Business — Foreign Cumulative",
+        "description": "Foreign property cumulative period summaries (from 2025-26)",
+    },
+    {
+        "name": "Self-Employment Business",
+        "description": "Self-employment cumulative and annual submissions",
+    },
+    {"name": "Xero", "description": "Xero Accounting bank accounts and transactions"},
+    {"name": "Debug", "description": "Sandbox fraud-header validation"},
+    {"name": "Health", "description": "Liveness probes"},
+]
+
 app = FastAPI(
     title="HMRC MTD & Xero Property Landlord API",
     description=(
         "Backend service for property landlords built on Adalo. "
         "Integrates HMRC Making Tax Digital (Income Tax Self Assessment) with full OAuth 2.0 "
         "and fraud prevention headers, plus Xero Accounting for bank accounts and transactions. "
-        "All sensitive auth logic lives here — Adalo only calls simple REST endpoints."
+        "All sensitive auth logic lives here — Adalo only calls simple REST endpoints. "
+        "Use /tester for a one-page sandbox re-test UI."
     ),
     version="2.0.0",
     lifespan=lifespan,
+    openapi_tags=OPENAPI_TAGS,
 )
 
 # Allow Adalo and local dev origins.  Restrict ALLOW_ORIGINS in production.
@@ -75,6 +124,16 @@ app.add_middleware(
 
 app.include_router(router)
 app.include_router(xero_router)
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+if _STATIC_DIR.is_dir():
+    app.mount("/tester-assets", StaticFiles(directory=str(_STATIC_DIR)), name="tester_assets")
+
+
+@app.get("/tester", tags=["Health"], include_in_schema=False)
+async def api_tester_page():
+    """One-page HMRC sandbox re-test UI (Auth → pick endpoint → Run)."""
+    return FileResponse(_STATIC_DIR / "tester.html")
 
 
 # ── Auth routes (public, no X-Session-ID required) ───────────────────────────────
