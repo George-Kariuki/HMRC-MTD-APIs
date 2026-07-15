@@ -1215,6 +1215,8 @@ class HMRCClient:
                 json=body,
             )
         _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Self-employment annual submission created/amended successfully."}
         return _json_or_empty(resp)
 
     async def get_self_employment_annual(
@@ -1238,6 +1240,150 @@ class HMRCClient:
                 ),
             )
         _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def delete_self_employment_annual(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        DELETE /individuals/business/self-employment/{nino}/{businessId}/annual/{taxYear}
+        (Accept v5.0)
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{self.base}/individuals/business/self-employment"
+                f"/{nino}/{business_id}/annual/{tax_year}",
+                headers=self._headers(
+                    "5.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Self-employment annual submission deleted successfully."}
+        return _json_or_empty(resp)
+
+    # ── Self-Employment Period Summaries (tax years ≤ 2024-25) ─────────────────────
+
+    async def create_self_employment_period(
+        self,
+        nino: str,
+        business_id: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        POST /individuals/business/self-employment/{nino}/{businessId}/period
+        (Accept v5.0)
+
+        Creates a periodic summary. Tax year is inferred from periodDates in the body.
+        Only for tax years 2024-25 or earlier (use cumulative endpoints from 2025-26).
+        Returns {"periodId": "YYYY-MM-DD_YYYY-MM-DD"}.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.base}/individuals/business/self-employment"
+                f"/{nino}/{business_id}/period",
+                headers=self._headers(
+                    "5.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def list_self_employment_periods(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/self-employment/{nino}/{businessId}/period/{taxYear}
+        (Accept v5.0)
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/self-employment"
+                f"/{nino}/{business_id}/period/{tax_year}",
+                headers=self._headers(
+                    "5.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def retrieve_self_employment_period(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        period_id: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/self-employment/{nino}/{businessId}/period/{taxYear}/{periodId}
+        (Accept v5.0)
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/self-employment"
+                f"/{nino}/{business_id}/period/{tax_year}/{period_id}",
+                headers=self._headers(
+                    "5.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def amend_self_employment_period(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        period_id: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        PUT /individuals/business/self-employment/{nino}/{businessId}/period/{taxYear}/{periodId}
+        (Accept v5.0)
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/self-employment"
+                f"/{nino}/{business_id}/period/{tax_year}/{period_id}",
+                headers=self._headers(
+                    "5.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Self-employment period summary amended successfully."}
         return _json_or_empty(resp)
 
     # ── Fraud header validation (sandbox only) ────────────────────────────────────

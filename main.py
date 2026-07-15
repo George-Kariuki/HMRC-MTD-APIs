@@ -90,8 +90,16 @@ OPENAPI_TAGS = [
         "description": "Foreign property cumulative period summaries (from 2025-26)",
     },
     {
-        "name": "Self-Employment Business",
-        "description": "Self-employment cumulative and annual submissions",
+        "name": "Self-Employment — Annual Submission",
+        "description": "Create, retrieve, and delete annual adjustments & allowances",
+    },
+    {
+        "name": "Self-Employment — Period Summaries",
+        "description": "Create, list, amend, retrieve period summaries (tax years ≤ 2024-25)",
+    },
+    {
+        "name": "Self-Employment — Cumulative Period Summary",
+        "description": "Create/amend and retrieve cumulative summaries (from 2025-26)",
     },
     {"name": "Xero", "description": "Xero Accounting bank accounts and transactions"},
     {"name": "Debug", "description": "Sandbox fraud-header validation"},

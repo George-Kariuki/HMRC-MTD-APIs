@@ -498,10 +498,10 @@ const ENDPOINTS = [
     sampleBody: null,
   },
 
-  // Self-Employment
+  // Self-Employment — Cumulative (from 2025-26)
   {
     id: "se-cum-put",
-    group: "Self-Employment Business",
+    group: "Self-Employment — Cumulative Period Summary",
     name: "Create/amend SE cumulative",
     method: "PUT",
     path: "/self-employment-cumulative",
@@ -543,7 +543,7 @@ const ENDPOINTS = [
   },
   {
     id: "se-cum-get",
-    group: "Self-Employment Business",
+    group: "Self-Employment — Cumulative Period Summary",
     name: "Retrieve SE cumulative",
     method: "GET",
     path: "/self-employment-cumulative",
@@ -556,9 +556,11 @@ const ENDPOINTS = [
     ],
     sampleBody: null,
   },
+
+  // Self-Employment — Annual
   {
     id: "se-annual-put",
-    group: "Self-Employment Business",
+    group: "Self-Employment — Annual Submission",
     name: "Create/amend SE annual",
     method: "PUT",
     path: "/self-employment-annual",
@@ -582,7 +584,7 @@ const ENDPOINTS = [
   },
   {
     id: "se-annual-get",
-    group: "Self-Employment Business",
+    group: "Self-Employment — Annual Submission",
     name: "Retrieve SE annual",
     method: "GET",
     path: "/self-employment-annual",
@@ -594,6 +596,134 @@ const ENDPOINTS = [
       { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
+  },
+  {
+    id: "se-annual-delete",
+    group: "Self-Employment — Annual Submission",
+    name: "Delete SE annual",
+    method: "DELETE",
+    path: "/self-employment-annual",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2025-26" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
+    ],
+    sampleBody: null,
+  },
+
+  // Self-Employment — Period Summaries (≤ 2024-25)
+  {
+    id: "se-period-create",
+    group: "Self-Employment — Period Summaries",
+    name: "Create SE period summary",
+    method: "POST",
+    path: "/self-employment-period",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+    ],
+    sampleBody: {
+      periodDates: {
+        periodStartDate: "2024-04-06",
+        periodEndDate: "2024-07-05",
+      },
+      periodIncome: {
+        turnover: 1000.99,
+        other: 1000.09,
+        taxTakenOffTradingIncome: 1000.99,
+      },
+      periodExpenses: {
+        costOfGoods: 1000.99,
+        paymentsToSubcontractors: 1000.99,
+        wagesAndStaffCosts: 1000.99,
+        carVanTravelExpenses: 1000.99,
+        premisesRunningCosts: 1000.99,
+        maintenanceCosts: 1000.99,
+        adminCosts: 1000.99,
+        businessEntertainmentCosts: 1000.99,
+        advertisingCosts: 1000.99,
+        interestOnBankOtherLoans: 1000.99,
+        financeCharges: 1000.99,
+        irrecoverableDebts: 1000.99,
+        professionalFees: 1000.99,
+        depreciation: 1000.99,
+        otherExpenses: 1000.99,
+      },
+    },
+  },
+  {
+    id: "se-period-list",
+    group: "Self-Employment — Period Summaries",
+    name: "List SE period summaries",
+    method: "GET",
+    path: "/self-employment-period",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
+      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "se-period-get",
+    group: "Self-Employment — Period Summaries",
+    name: "Retrieve SE period summary",
+    method: "GET",
+    path: "/self-employment-period/{periodId}",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "periodId", label: "periodId (path)", default: "2024-04-06_2024-07-05", inPath: true },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
+      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+    ],
+    sampleBody: null,
+  },
+  {
+    id: "se-period-amend",
+    group: "Self-Employment — Period Summaries",
+    name: "Amend SE period summary",
+    method: "PUT",
+    path: "/self-employment-period/{periodId}",
+    needsSession: true,
+    needsNino: true,
+    params: [
+      { key: "periodId", label: "periodId (path)", default: "2024-04-06_2024-07-05", inPath: true },
+      { key: "businessId", label: "businessId", default: "XBIS12345678901" },
+      { key: "taxYear", label: "taxYear", default: "2024-25" },
+      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+    ],
+    sampleBody: {
+      periodIncome: {
+        turnover: 1000.99,
+        other: 1000.99,
+        taxTakenOffTradingIncome: 1000.99,
+      },
+      periodExpenses: {
+        costOfGoods: 1000.99,
+        paymentsToSubcontractors: 1000.99,
+        wagesAndStaffCosts: 1000.99,
+        carVanTravelExpenses: 1000.99,
+        premisesRunningCosts: 1000.99,
+        maintenanceCosts: 1000.99,
+        adminCosts: 1000.99,
+        businessEntertainmentCosts: 1000.99,
+        advertisingCosts: 1000.99,
+        interestOnBankOtherLoans: 1000.99,
+        financeCharges: 1000.99,
+        irrecoverableDebts: 1000.99,
+        professionalFees: 1000.99,
+        depreciation: 1000.99,
+        otherExpenses: 1000.99,
+      },
+    },
   },
 
   // Debug
@@ -728,6 +858,10 @@ function selectEndpoint(id) {
       const savedId = sessionGet(STORAGE_KEYS.lastPropertyId);
       if (savedId) input.value = savedId;
     }
+    if (p.key === "periodId") {
+      const savedPeriod = sessionGet("hmrc_tester_last_period_id");
+      if (savedPeriod) input.value = savedPeriod;
+    }
     label.appendChild(input);
     paramsEl.appendChild(label);
   }
@@ -835,6 +969,15 @@ async function runRequest() {
         const data = JSON.parse(text);
         if (data.propertyId) {
           sessionSet(STORAGE_KEYS.lastPropertyId, data.propertyId);
+        }
+      } catch (_) {}
+    }
+    // Auto-store periodId from SE period create
+    if (ep.id === "se-period-create" && res.ok) {
+      try {
+        const data = JSON.parse(text);
+        if (data.periodId) {
+          sessionSet("hmrc_tester_last_period_id", data.periodId);
         }
       } catch (_) {}
     }
