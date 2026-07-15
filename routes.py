@@ -354,7 +354,31 @@ class PeriodicAmountsBody(BaseModel):
     travel_costs:               float = Field(0.0, description="Travel costs")
 
 
-def _uk_period_income_expenses(amounts: PeriodicAmountsBody) -> tuple[dict, dict]:
+def _uk_period_income_expenses(
+    amounts: PeriodicAmountsBody,
+    property_type: str = "ukNonFhlProperty",
+) -> tuple[dict, dict]:
+    """
+    Map PeriodicAmountsBody to HMRC income/expenses.
+    ukFhlProperty omits non-FHL-only fields (premiumsOfLeaseGrant, reversePremiums,
+    otherIncome, residentialFinancialCost).
+    """
+    if property_type == "ukFhlProperty":
+        income = {
+            "periodAmount": round(amounts.rent_income, 2),
+            "taxDeducted":  round(amounts.tax_deducted, 2),
+        }
+        expenses = {
+            "premisesRunningCosts":  round(amounts.premises_running_costs, 2),
+            "repairsAndMaintenance": round(amounts.repairs_and_maintenance, 2),
+            "financialCosts":        round(amounts.financial_costs, 2),
+            "professionalFees":      round(amounts.professional_fees, 2),
+            "costOfServices":        round(amounts.cost_of_services, 2),
+            "other":                 round(amounts.other_expenses, 2),
+            "travelCosts":           round(amounts.travel_costs, 2),
+        }
+        return income, expenses
+
     income = {
         "periodAmount":         round(amounts.rent_income, 2),
         "premiumsOfLeaseGrant": round(amounts.premiums_of_lease_grant, 2),
@@ -483,7 +507,7 @@ async def submit_periodic(
     resolved_tax_year = tax_year or derive_tax_year(start_date)
     assert_tax_year_at_most(resolved_tax_year)
 
-    income, expenses = _uk_period_income_expenses(amounts)
+    income, expenses = _uk_period_income_expenses(amounts, property_type)
     client = await _build_client(request, session_id)
     result = await client.create_period_summary(
         nino=nino,
@@ -549,7 +573,7 @@ async def amend_period_summary(
     assert_tax_year_at_most(tax_year)
     session_id = _require_session(x_session_id)
     tokens, nino = _require_nino(session_id)
-    income, expenses = _uk_period_income_expenses(amounts)
+    income, expenses = _uk_period_income_expenses(amounts, property_type)
     client = await _build_client(request, session_id)
     result = await client.amend_period_summary(
         nino=nino,

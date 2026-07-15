@@ -6,9 +6,23 @@ const STORAGE_KEYS = {
   apiBase: "hmrc_tester_api_base",
   oauthState: "hmrc_tester_oauth_state",
   lastPropertyId: "hmrc_tester_last_property_id",
-  lastSubmissionId: "hmrc_tester_last_submission_id",
-  lastPeriodId: "hmrc_tester_last_period_id",
+  lastUkSubmissionId: "hmrc_tester_last_uk_submission_id",
+  lastForeignSubmissionId: "hmrc_tester_last_foreign_submission_id",
+  lastSePeriodId: "hmrc_tester_last_se_period_id",
+  lastHistFhlPeriodId: "hmrc_tester_last_hist_fhl_period_id",
+  lastHistNonFhlPeriodId: "hmrc_tester_last_hist_non_fhl_period_id",
 };
+
+function submissionStorageKey(epId) {
+  if (epId && epId.startsWith("foreign-")) return STORAGE_KEYS.lastForeignSubmissionId;
+  return STORAGE_KEYS.lastUkSubmissionId;
+}
+
+function periodStorageKey(epId) {
+  if (epId && epId.startsWith("hist-fhl")) return STORAGE_KEYS.lastHistFhlPeriodId;
+  if (epId && epId.startsWith("hist-non-fhl")) return STORAGE_KEYS.lastHistNonFhlPeriodId;
+  return STORAGE_KEYS.lastSePeriodId;
+}
 
 /** Sensitive values use sessionStorage (cleared when the tab closes). */
 function sessionGet(key) {
@@ -324,7 +338,7 @@ const ENDPOINTS = [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2024-25" },
       { key: "submissionId", label: "submissionId", default: "" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "UK_PROPERTY" },
     ],
     sampleBody: null,
   },
@@ -397,7 +411,7 @@ const ENDPOINTS = [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2024-25" },
       { key: "submissionId", label: "submissionId", default: "" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "FOREIGN_PROPERTY" },
     ],
     sampleBody: null,
   },
@@ -498,7 +512,7 @@ const ENDPOINTS = [
     needsNino: true,
     params: [
       { key: "taxYear", label: "taxYear", default: "2021-22" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "DELETE" },
     ],
     sampleBody: null,
   },
@@ -557,7 +571,7 @@ const ENDPOINTS = [
     needsNino: true,
     params: [
       { key: "taxYear", label: "taxYear", default: "2021-22" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "DELETE" },
     ],
     sampleBody: null,
   },
@@ -752,7 +766,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       from_date: "2025-04-06",
@@ -783,7 +797,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
   },
@@ -827,7 +841,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "UK_PROPERTY" },
     ],
     sampleBody: null,
   },
@@ -865,7 +879,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "FOREIGN_PROPERTY" },
     ],
     sampleBody: null,
   },
@@ -897,7 +911,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       propertyName: "Bob & Bobby Co",
@@ -916,7 +930,7 @@ const ENDPOINTS = [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
       { key: "propertyId", label: "propertyId", default: "" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
   },
@@ -931,7 +945,7 @@ const ENDPOINTS = [
     params: [
       { key: "propertyId", label: "propertyId (path)", default: "8e8b8450-dc1b-4360-8109-7067337b42cb", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       propertyName: "Bob & Bobby Co",
@@ -950,7 +964,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       fromDate: "2026-04-06",
@@ -993,7 +1007,7 @@ const ENDPOINTS = [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
       { key: "propertyId", label: "propertyId", default: "8e8b8450-dc1b-4360-8109-7067337b42cb" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
   },
@@ -1300,8 +1314,11 @@ function clearSavedData() {
   sessionStorage.removeItem(STORAGE_KEYS.nino);
   sessionStorage.removeItem(STORAGE_KEYS.oauthState);
   sessionStorage.removeItem(STORAGE_KEYS.lastPropertyId);
-  sessionStorage.removeItem(STORAGE_KEYS.lastSubmissionId);
-  sessionStorage.removeItem(STORAGE_KEYS.lastPeriodId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastUkSubmissionId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastForeignSubmissionId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastSePeriodId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastHistFhlPeriodId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastHistNonFhlPeriodId);
   localStorage.removeItem(STORAGE_KEYS.sessionId);
   localStorage.removeItem(STORAGE_KEYS.nino);
   localStorage.removeItem(STORAGE_KEYS.oauthState);
@@ -1361,11 +1378,11 @@ function selectEndpoint(id) {
       if (savedId) input.value = savedId;
     }
     if (p.key === "periodId") {
-      const savedPeriod = sessionGet(STORAGE_KEYS.lastPeriodId);
+      const savedPeriod = sessionGet(periodStorageKey(ep.id));
       if (savedPeriod) input.value = savedPeriod;
     }
     if (p.key === "submissionId") {
-      const savedSub = sessionGet(STORAGE_KEYS.lastSubmissionId);
+      const savedSub = sessionGet(submissionStorageKey(ep.id));
       if (savedSub) input.value = savedSub;
     }
     label.appendChild(input);
@@ -1478,12 +1495,19 @@ async function runRequest() {
         }
       } catch (_) {}
     }
-    // Auto-store submissionId from property period creates
-    if ((ep.id === "period-submit" || ep.id === "foreign-period-create") && res.ok) {
+    // Auto-store submissionId from property period creates (scoped by family)
+    if (ep.id === "period-submit" && res.ok) {
       try {
         const data = JSON.parse(text);
         const sid = data.submissionId || (data.result && data.result.submissionId);
-        if (sid) sessionSet(STORAGE_KEYS.lastSubmissionId, sid);
+        if (sid) sessionSet(STORAGE_KEYS.lastUkSubmissionId, sid);
+      } catch (_) {}
+    }
+    if (ep.id === "foreign-period-create" && res.ok) {
+      try {
+        const data = JSON.parse(text);
+        const sid = data.submissionId || (data.result && data.result.submissionId);
+        if (sid) sessionSet(STORAGE_KEYS.lastForeignSubmissionId, sid);
       } catch (_) {}
     }
     // Auto-store periodId from SE period create
@@ -1491,19 +1515,23 @@ async function runRequest() {
       try {
         const data = JSON.parse(text);
         if (data.periodId) {
-          sessionSet(STORAGE_KEYS.lastPeriodId, data.periodId);
+          sessionSet(STORAGE_KEYS.lastSePeriodId, data.periodId);
         }
       } catch (_) {}
     }
     // Auto-store periodId from historic property period creates
-    if (
-      (ep.id === "hist-fhl-period-create" || ep.id === "hist-non-fhl-period-create") &&
-      res.ok
-    ) {
+    if (ep.id === "hist-fhl-period-create" && res.ok) {
       try {
         const data = JSON.parse(text);
         const pid = data.periodId || (data.result && data.result.periodId);
-        if (pid) sessionSet(STORAGE_KEYS.lastPeriodId, pid);
+        if (pid) sessionSet(STORAGE_KEYS.lastHistFhlPeriodId, pid);
+      } catch (_) {}
+    }
+    if (ep.id === "hist-non-fhl-period-create" && res.ok) {
+      try {
+        const data = JSON.parse(text);
+        const pid = data.periodId || (data.result && data.result.periodId);
+        if (pid) sessionSet(STORAGE_KEYS.lastHistNonFhlPeriodId, pid);
       } catch (_) {}
     }
   } catch (err) {

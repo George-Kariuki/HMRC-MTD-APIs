@@ -348,6 +348,11 @@ def assert_historic_period_body(body: dict) -> str:
             status_code=400,
             detail="Body must include fromDate in YYYY-MM-DD format.",
         )
+    to_date = body.get("toDate")
+    if to_date is not None:
+        if not isinstance(to_date, str):
+            raise HTTPException(status_code=400, detail="toDate must be a YYYY-MM-DD string.")
+        derive_tax_year(to_date)  # validates ISO date → 400 if malformed
     return assert_historic_period_from_date(from_date)
 
 

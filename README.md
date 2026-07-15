@@ -166,13 +166,13 @@ GET /business-details
 
 | Endpoint | Parameters | Description |
 |---|---|---|
-| `POST /uk-period` | `businessId`, `startDate`, `endDate`, `taxYear`, `propertyType`, body | Create UK period summary |
-| `PUT /uk-period` | `businessId`, `taxYear`, `submissionId`, `propertyType`, body | Amend UK period summary |
-| `GET /uk-period` | `businessId`, `taxYear`, `submissionId` | Retrieve UK period summary |
-| `GET /property-period-summaries` | `businessId`, `taxYear` | List UK or foreign period summaries |
-| `POST /foreign-period` | `businessId`, `taxYear`, body (`fromDate`/`toDate`/…) | Create foreign period summary |
-| `GET /foreign-period` | `businessId`, `taxYear`, `submissionId` | Retrieve foreign period summary |
-| `PUT /foreign-period` | `businessId`, `taxYear`, `submissionId`, body | Amend foreign period summary |
+| `POST /uk-period` | `businessId`, `startDate`, `endDate`, `taxYear`, `propertyType`, `govTestScenario` (optional), body | Create UK period summary |
+| `PUT /uk-period` | `businessId`, `taxYear`, `submissionId`, `propertyType`, `govTestScenario` (optional), body | Amend UK period summary |
+| `GET /uk-period` | `businessId`, `taxYear`, `submissionId`, `govTestScenario` (optional) | Retrieve UK period summary |
+| `GET /property-period-summaries` | `businessId`, `taxYear`, `govTestScenario` (optional) | List UK or foreign period summaries |
+| `POST /foreign-period` | `businessId`, `taxYear`, `govTestScenario` (optional), body (`fromDate`/`toDate`/…) | Create foreign period summary |
+| `GET /foreign-period` | `businessId`, `taxYear`, `submissionId`, `govTestScenario` (optional) | Retrieve foreign period summary |
+| `PUT /foreign-period` | `businessId`, `taxYear`, `submissionId`, `govTestScenario` (optional), body | Amend foreign period summary |
 
 **Notes:**
 - Create bodies include period dates. Amend bodies must **not** include `fromDate`/`toDate`.
@@ -223,20 +223,20 @@ GET /business-details
 
 | Endpoint | Parameters | Description |
 |---|---|---|
-| `PUT /historic-fhl-annual` | `taxYear`, body | Create/amend historic FHL annual |
-| `GET /historic-fhl-annual` | `taxYear` | Retrieve historic FHL annual |
-| `DELETE /historic-fhl-annual` | `taxYear` | Delete historic FHL annual |
-| `PUT /historic-non-fhl-annual` | `taxYear`, body | Create/amend historic Non-FHL annual |
-| `GET /historic-non-fhl-annual` | `taxYear` | Retrieve historic Non-FHL annual |
-| `DELETE /historic-non-fhl-annual` | `taxYear` | Delete historic Non-FHL annual |
-| `GET /historic-fhl-period` | — | List historic FHL periods |
-| `POST /historic-fhl-period` | body (`fromDate`/`toDate`/…) | Create historic FHL period → `periodId` |
-| `GET /historic-fhl-period/{periodId}` | path `periodId` | Retrieve historic FHL period |
-| `PUT /historic-fhl-period/{periodId}` | path `periodId`, body | Amend historic FHL period |
-| `GET /historic-non-fhl-period` | — | List historic Non-FHL periods |
-| `POST /historic-non-fhl-period` | body | Create historic Non-FHL period → `periodId` |
-| `GET /historic-non-fhl-period/{periodId}` | path `periodId` | Retrieve historic Non-FHL period |
-| `PUT /historic-non-fhl-period/{periodId}` | path `periodId`, body | Amend historic Non-FHL period |
+| `PUT /historic-fhl-annual` | `taxYear`, `govTestScenario` (optional), body | Create/amend historic FHL annual |
+| `GET /historic-fhl-annual` | `taxYear`, `govTestScenario` (optional) | Retrieve historic FHL annual |
+| `DELETE /historic-fhl-annual` | `taxYear`, `govTestScenario` (optional) | Delete historic FHL annual |
+| `PUT /historic-non-fhl-annual` | `taxYear`, `govTestScenario` (optional), body | Create/amend historic Non-FHL annual |
+| `GET /historic-non-fhl-annual` | `taxYear`, `govTestScenario` (optional) | Retrieve historic Non-FHL annual |
+| `DELETE /historic-non-fhl-annual` | `taxYear`, `govTestScenario` (optional) | Delete historic Non-FHL annual |
+| `GET /historic-fhl-period` | `govTestScenario` (optional) | List historic FHL periods |
+| `POST /historic-fhl-period` | `govTestScenario` (optional), body (`fromDate`/`toDate`/…) | Create historic FHL period → `periodId` |
+| `GET /historic-fhl-period/{periodId}` | path `periodId`, `govTestScenario` (optional) | Retrieve historic FHL period |
+| `PUT /historic-fhl-period/{periodId}` | path `periodId`, `govTestScenario` (optional), body | Amend historic FHL period |
+| `GET /historic-non-fhl-period` | `govTestScenario` (optional) | List historic Non-FHL periods |
+| `POST /historic-non-fhl-period` | `govTestScenario` (optional), body | Create historic Non-FHL period → `periodId` |
+| `GET /historic-non-fhl-period/{periodId}` | path `periodId`, `govTestScenario` (optional) | Retrieve historic Non-FHL period |
+| `PUT /historic-non-fhl-period/{periodId}` | path `periodId`, `govTestScenario` (optional), body | Amend historic Non-FHL period |
 
 **Notes:**
 - Annual bodies use `annualAdjustments` / `annualAllowances` (not `ukFhlProperty`).
