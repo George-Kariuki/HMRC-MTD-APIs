@@ -252,9 +252,9 @@ const ENDPOINTS = [
   {
     id: "period-submit",
     group: "Property Business — Period Summaries",
-    name: "Create UK period summary",
+    name: "Create a UK Property Income & Expenses Period Summary",
     method: "POST",
-    path: "/submit-periodic",
+    path: "/uk-period",
     needsSession: true,
     needsNino: true,
     params: [
@@ -284,9 +284,9 @@ const ENDPOINTS = [
   {
     id: "period-amend",
     group: "Property Business — Period Summaries",
-    name: "Amend UK period summary",
+    name: "Amend a UK Property Income & Expenses Period Summary",
     method: "PUT",
-    path: "/period-summary",
+    path: "/uk-period",
     needsSession: true,
     needsNino: true,
     params: [
@@ -315,9 +315,9 @@ const ENDPOINTS = [
   {
     id: "period-get",
     group: "Property Business — Period Summaries",
-    name: "Retrieve UK period summary",
+    name: "Retrieve a UK Property Income & Expenses Period Summary",
     method: "GET",
-    path: "/period-summary",
+    path: "/uk-period",
     needsSession: true,
     needsNino: true,
     params: [
@@ -331,9 +331,9 @@ const ENDPOINTS = [
   {
     id: "period-list",
     group: "Property Business — Period Summaries",
-    name: "List period summaries (UK or foreign)",
+    name: "List Property Income and Expenses Period Summaries",
     method: "GET",
-    path: "/period-summaries",
+    path: "/property-period-summaries",
     needsSession: true,
     needsNino: true,
     params: [
@@ -346,7 +346,7 @@ const ENDPOINTS = [
   {
     id: "foreign-period-create",
     group: "Property Business — Period Summaries",
-    name: "Create foreign period summary",
+    name: "Create a Foreign Property Income & Expenses Period Summary",
     method: "POST",
     path: "/foreign-period",
     needsSession: true,
@@ -388,7 +388,7 @@ const ENDPOINTS = [
   {
     id: "foreign-period-get",
     group: "Property Business — Period Summaries",
-    name: "Retrieve foreign period summary",
+    name: "Retrieve a Foreign Property Income & Expenses Period Summary",
     method: "GET",
     path: "/foreign-period",
     needsSession: true,
@@ -404,7 +404,7 @@ const ENDPOINTS = [
   {
     id: "foreign-period-amend",
     group: "Property Business — Period Summaries",
-    name: "Amend foreign period summary",
+    name: "Amend a Foreign Property Income & Expenses Period Summary",
     method: "PUT",
     path: "/foreign-period",
     needsSession: true,
@@ -447,7 +447,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-annual-put",
     group: "Property Business — Historic",
-    name: "Create/amend historic FHL annual",
+    name: "Create and Amend a Historic FHL UK Property Business Annual Submission",
     method: "PUT",
     path: "/historic-fhl-annual",
     needsSession: true,
@@ -477,7 +477,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-annual-get",
     group: "Property Business — Historic",
-    name: "Retrieve historic FHL annual",
+    name: "Retrieve a Historic FHL UK Property Business Annual Submission",
     method: "GET",
     path: "/historic-fhl-annual",
     needsSession: true,
@@ -491,7 +491,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-annual-delete",
     group: "Property Business — Historic",
-    name: "Delete historic FHL annual",
+    name: "Delete a Historic FHL UK Property Business Annual Submission",
     method: "DELETE",
     path: "/historic-fhl-annual",
     needsSession: true,
@@ -505,7 +505,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-annual-put",
     group: "Property Business — Historic",
-    name: "Create/amend historic Non-FHL annual",
+    name: "Create and Amend a Historic Non-FHL UK Property Business Annual Submission",
     method: "PUT",
     path: "/historic-non-fhl-annual",
     needsSession: true,
@@ -536,7 +536,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-annual-get",
     group: "Property Business — Historic",
-    name: "Retrieve historic Non-FHL annual",
+    name: "Retrieve a Historic Non-FHL UK Property Business Annual Submission",
     method: "GET",
     path: "/historic-non-fhl-annual",
     needsSession: true,
@@ -550,7 +550,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-annual-delete",
     group: "Property Business — Historic",
-    name: "Delete historic Non-FHL annual",
+    name: "Delete a Historic Non-FHL UK Property Business Annual Submission",
     method: "DELETE",
     path: "/historic-non-fhl-annual",
     needsSession: true,
@@ -564,7 +564,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-period-list",
     group: "Property Business — Historic",
-    name: "List historic FHL periods",
+    name: "List Historic FHL UK property Income & Expenses Period Summaries",
     method: "GET",
     path: "/historic-fhl-period",
     needsSession: true,
@@ -575,7 +575,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-period-create",
     group: "Property Business — Historic",
-    name: "Create historic FHL period",
+    name: "Create a Historic FHL UK Property Income & Expenses Period Summary",
     method: "POST",
     path: "/historic-fhl-period",
     needsSession: true,
@@ -604,7 +604,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-period-get",
     group: "Property Business — Historic",
-    name: "Retrieve historic FHL period",
+    name: "Retrieve a Historic FHL UK Property Income & Expenses Period Summary",
     method: "GET",
     path: "/historic-fhl-period/{periodId}",
     needsSession: true,
@@ -618,7 +618,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-period-amend",
     group: "Property Business — Historic",
-    name: "Amend historic FHL period",
+    name: "Amend a Historic FHL UK Property Income & Expenses Period Summary",
     method: "PUT",
     path: "/historic-fhl-period/{periodId}",
     needsSession: true,
@@ -648,7 +648,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-period-list",
     group: "Property Business — Historic",
-    name: "List historic Non-FHL periods",
+    name: "List Historic Non-FHL UK Property Income & Expenses Period Summaries",
     method: "GET",
     path: "/historic-non-fhl-period",
     needsSession: true,
@@ -659,7 +659,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-period-create",
     group: "Property Business — Historic",
-    name: "Create historic Non-FHL period",
+    name: "Create a Historic Non-FHL UK Property Income & Expenses Period Summary",
     method: "POST",
     path: "/historic-non-fhl-period",
     needsSession: true,
@@ -693,7 +693,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-period-get",
     group: "Property Business — Historic",
-    name: "Retrieve historic Non-FHL period",
+    name: "Retrieve a Historic Non-FHL UK Property Income and Expenses Period Summary",
     method: "GET",
     path: "/historic-non-fhl-period/{periodId}",
     needsSession: true,
@@ -707,7 +707,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-period-amend",
     group: "Property Business — Historic",
-    name: "Amend historic Non-FHL period",
+    name: "Amend a Historic Non-FHL UK Property Income & Expenses Period Summary",
     method: "PUT",
     path: "/historic-non-fhl-period/{periodId}",
     needsSession: true,
@@ -744,9 +744,9 @@ const ENDPOINTS = [
   {
     id: "uk-cum-put",
     group: "Property Business — UK Cumulative",
-    name: "Create/amend UK cumulative",
+    name: "Create or Amend a UK Property Cumulative Period Summary",
     method: "PUT",
-    path: "/property-cumulative",
+    path: "/uk-cumulative",
     needsSession: true,
     needsNino: true,
     params: [
@@ -775,9 +775,9 @@ const ENDPOINTS = [
   {
     id: "uk-cum-get",
     group: "Property Business — UK Cumulative",
-    name: "Retrieve UK cumulative",
+    name: "Retrieve a UK Property Cumulative Period Summary",
     method: "GET",
-    path: "/property-cumulative",
+    path: "/uk-cumulative",
     needsSession: true,
     needsNino: true,
     params: [
@@ -792,9 +792,9 @@ const ENDPOINTS = [
   {
     id: "annual-put",
     group: "Property Business — Annual Submission",
-    name: "Create/amend UK annual",
+    name: "Create and Amend a UK Property Business Annual Submission",
     method: "PUT",
-    path: "/submit-annual",
+    path: "/uk-annual",
     needsSession: true,
     needsNino: true,
     params: [
@@ -819,9 +819,9 @@ const ENDPOINTS = [
   {
     id: "annual-get",
     group: "Property Business — Annual Submission",
-    name: "Retrieve UK annual",
+    name: "Retrieve a UK Property Business Annual Submission",
     method: "GET",
-    path: "/annual-submission",
+    path: "/uk-annual",
     needsSession: true,
     needsNino: true,
     params: [
@@ -834,7 +834,7 @@ const ENDPOINTS = [
   {
     id: "foreign-annual-put",
     group: "Property Business — Annual Submission",
-    name: "Create/amend foreign annual",
+    name: "Create and Amend a Foreign Property Annual Submission",
     method: "PUT",
     path: "/foreign-annual",
     needsSession: true,
@@ -857,7 +857,7 @@ const ENDPOINTS = [
   {
     id: "foreign-annual-get",
     group: "Property Business — Annual Submission",
-    name: "Retrieve foreign annual",
+    name: "Retrieve a Foreign Property Annual Submission",
     method: "GET",
     path: "/foreign-annual",
     needsSession: true,
@@ -872,9 +872,9 @@ const ENDPOINTS = [
   {
     id: "annual-delete",
     group: "Property Business — Annual Submission",
-    name: "Delete property annual (UK or foreign)",
+    name: "Delete a Property Annual Submission",
     method: "DELETE",
-    path: "/annual-submission",
+    path: "/property-annual",
     needsSession: true,
     needsNino: true,
     params: [
@@ -889,7 +889,7 @@ const ENDPOINTS = [
   {
     id: "fpd-create",
     group: "Property Business — Foreign Property Details",
-    name: "Create foreign property details",
+    name: "Create Foreign Property Details",
     method: "POST",
     path: "/foreign-property-details",
     needsSession: true,
@@ -907,7 +907,7 @@ const ENDPOINTS = [
   {
     id: "fpd-get",
     group: "Property Business — Foreign Property Details",
-    name: "Retrieve foreign property details",
+    name: "Retrieve Foreign Property Details",
     method: "GET",
     path: "/foreign-property-details",
     needsSession: true,
@@ -923,7 +923,7 @@ const ENDPOINTS = [
   {
     id: "fpd-put",
     group: "Property Business — Foreign Property Details",
-    name: "Update foreign property details",
+    name: "Update Foreign Property Details",
     method: "PUT",
     path: "/foreign-property-details/{propertyId}",
     needsSession: true,
@@ -942,9 +942,9 @@ const ENDPOINTS = [
   {
     id: "fp-cum-put",
     group: "Property Business — Foreign Cumulative",
-    name: "Create/amend foreign cumulative",
+    name: "Create or Amend a Foreign Property Cumulative Period Summary",
     method: "PUT",
-    path: "/foreign-property-cumulative",
+    path: "/foreign-cumulative",
     needsSession: true,
     needsNino: true,
     params: [
@@ -984,9 +984,9 @@ const ENDPOINTS = [
   {
     id: "fp-cum-get",
     group: "Property Business — Foreign Cumulative",
-    name: "Retrieve foreign cumulative",
+    name: "Retrieve a Foreign Property Cumulative Period Summary",
     method: "GET",
-    path: "/foreign-property-cumulative",
+    path: "/foreign-cumulative",
     needsSession: true,
     needsNino: true,
     params: [

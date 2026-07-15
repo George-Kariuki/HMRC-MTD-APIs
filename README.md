@@ -133,7 +133,7 @@ GET /business-details
 → GET /business-details/{businessId}/accounting-type?taxYear=2025-26
 → GET /business-details/{businessId}/periods-of-account?taxYear=2025-26
 → GET /obligations
-→ PUT /property-cumulative or PUT /self-employment-cumulative
+→ PUT /uk-cumulative or PUT /self-employment-cumulative
 ```
 
 **Sample response — `/business-details`:**
@@ -166,10 +166,10 @@ GET /business-details
 
 | Endpoint | Parameters | Description |
 |---|---|---|
-| `POST /submit-periodic` | `businessId`, `startDate`, `endDate`, `taxYear`, `propertyType`, body | Create UK period summary |
-| `PUT /period-summary` | `businessId`, `taxYear`, `submissionId`, `propertyType`, body | Amend UK period summary |
-| `GET /period-summary` | `businessId`, `taxYear`, `submissionId` | Retrieve UK period summary |
-| `GET /period-summaries` | `businessId`, `taxYear` | List UK or foreign period summaries |
+| `POST /uk-period` | `businessId`, `startDate`, `endDate`, `taxYear`, `propertyType`, body | Create UK period summary |
+| `PUT /uk-period` | `businessId`, `taxYear`, `submissionId`, `propertyType`, body | Amend UK period summary |
+| `GET /uk-period` | `businessId`, `taxYear`, `submissionId` | Retrieve UK period summary |
+| `GET /property-period-summaries` | `businessId`, `taxYear` | List UK or foreign period summaries |
 | `POST /foreign-period` | `businessId`, `taxYear`, body (`fromDate`/`toDate`/…) | Create foreign period summary |
 | `GET /foreign-period` | `businessId`, `taxYear`, `submissionId` | Retrieve foreign period summary |
 | `PUT /foreign-period` | `businessId`, `taxYear`, `submissionId`, body | Amend foreign period summary |
@@ -187,10 +187,10 @@ GET /business-details
 
 | Endpoint | Parameters | Description |
 |---|---|---|
-| `PUT /property-cumulative` | `businessId`, `taxYear` (query), `govTestScenario` (optional), body (income/expense fields) | Create or amend cumulative income & expenses |
-| `GET /property-cumulative` | `businessId`, `taxYear` (query, required), `govTestScenario` (optional) | Retrieve current cumulative summary |
+| `PUT /uk-cumulative` | `businessId`, `taxYear` (query), `govTestScenario` (optional), body (income/expense fields) | Create or amend cumulative income & expenses |
+| `GET /uk-cumulative` | `businessId`, `taxYear` (query, required), `govTestScenario` (optional) | Retrieve current cumulative summary |
 
-**Key body fields for `PUT /property-cumulative`:**
+**Key body fields for `PUT /uk-cumulative`:**
 | Field | Type | Description |
 |---|---|---|
 | `from_date` / `to_date` | string (optional) | Maps to HMRC `fromDate` / `toDate` |
@@ -203,11 +203,11 @@ GET /business-details
 
 | Endpoint | Parameters | Description |
 |---|---|---|
-| `PUT /submit-annual` | `businessId`, `taxYear`, `govTestScenario` (optional), body (`ukProperty`) | Create or amend UK annual |
-| `GET /annual-submission` | `businessId`, `taxYear`, `govTestScenario` (optional) | Retrieve UK annual |
+| `PUT /uk-annual` | `businessId`, `taxYear`, `govTestScenario` (optional), body (`ukProperty`) | Create or amend UK annual |
+| `GET /uk-annual` | `businessId`, `taxYear`, `govTestScenario` (optional) | Retrieve UK annual |
 | `PUT /foreign-annual` | `businessId`, `taxYear`, `govTestScenario` (optional), body (`foreignProperty[]`) | Create or amend foreign annual |
 | `GET /foreign-annual` | `businessId`, `taxYear`, `govTestScenario` (optional) | Retrieve foreign annual |
-| `DELETE /annual-submission` | `businessId`, `taxYear`, `govTestScenario` (optional) | Delete UK or foreign annual (shared HMRC path) |
+| `DELETE /property-annual` | `businessId`, `taxYear`, `govTestScenario` (optional) | Delete UK or foreign annual (shared HMRC path) |
 
 **Body notes:**
 - UK **2025-26+**: `ukProperty` only (FHL merged). Earlier years may use `ukFhlProperty` / `ukProperty`.
@@ -347,9 +347,9 @@ X-Session-ID: <your-session-id>
 
 4. Submit quarterly figures (≤ 2024-25)
    → User enters income + expenses for the period
-   → Call POST /submit-periodic with period dates + amounts
-   → Store returned submissionId; amend later via PUT /period-summary
-   → From 2025-26 use PUT /property-cumulative instead
+   → Call POST /uk-period with period dates + amounts
+   → Store returned submissionId; amend later via PUT /uk-period
+   → From 2025-26 use PUT /uk-cumulative instead
 ```
 
 ---
@@ -463,5 +463,5 @@ Xero access tokens expire after 30 minutes. The `get_valid_xero_token()` functio
 
 - UK tax year: **6 April → 5 April**
 - HMRC format: `"2024-25"` (not `"2024-2025"`)
-- The `tax_year` field in `POST /submit-periodic` is auto-derived from `start_date` if omitted
+- The `tax_year` field in `POST /uk-period` is auto-derived from `start_date` if omitted
 - Periodic submissions are **cumulative** — always send the full YTD total, not just the quarter's figures
