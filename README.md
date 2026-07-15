@@ -262,6 +262,7 @@ GET /business-details
 |---|---|---|
 | `PUT /self-employment-annual` | `businessId`, `taxYear` (query), `govTestScenario` (optional), body (HMRC JSON) | Create or amend SE annual adjustments & allowances |
 | `GET /self-employment-annual` | `businessId`, `taxYear` (query, required), `govTestScenario` (optional) | Retrieve SE annual submission |
+| `DELETE /self-employment-annual` | `businessId`, `taxYear` (query, required), `govTestScenario` (optional) | Delete SE annual submission |
 
 **Key body fields for `PUT /self-employment-annual`:**
 | Field | Type | Description |
@@ -272,6 +273,16 @@ GET /business-details
 
 > Do not use deprecated `overlapReliefUsed` or `averagingAdjustment` for tax years 2024-25 onwards.
 
+#### Self-Employment Period Summaries (tax years ≤ 2024-25)
+
+From 2025-26 use the cumulative endpoints instead.
+
+| Endpoint | Parameters | Description |
+|---|---|---|
+| `POST /self-employment-period` | `businessId` (query), body with `periodDates` / income / expenses | Create period summary |
+| `GET /self-employment-period` | `businessId`, `taxYear` (query) | List period summaries |
+| `GET /self-employment-period/{periodId}` | `periodId` (path), `businessId`, `taxYear` | Retrieve one period summary |
+| `PUT /self-employment-period/{periodId}` | `periodId` (path), `businessId`, `taxYear`, body | Amend period summary |
 ---
 
 ## Fraud Prevention Headers

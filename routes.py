@@ -1631,7 +1631,10 @@ HMRC_SELF_EMPLOYMENT_CUMULATIVE_EXAMPLE = {
 }
 
 
-@router.put("/self-employment-cumulative", tags=["Self-Employment Business"])
+@router.put(
+    "/self-employment-cumulative",
+    tags=["Self-Employment — Cumulative Period Summary"],
+)
 async def submit_self_employment_cumulative(
     request: Request,
     body: dict = Body(
@@ -1686,7 +1689,10 @@ async def submit_self_employment_cumulative(
     }
 
 
-@router.get("/self-employment-cumulative", tags=["Self-Employment Business"])
+@router.get(
+    "/self-employment-cumulative",
+    tags=["Self-Employment — Cumulative Period Summary"],
+)
 async def get_self_employment_cumulative(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -1764,7 +1770,7 @@ HMRC_SELF_EMPLOYMENT_ANNUAL_EXAMPLE = {
 }
 
 
-@router.put("/self-employment-annual", tags=["Self-Employment Business"])
+@router.put("/self-employment-annual", tags=["Self-Employment — Annual Submission"])
 async def submit_self_employment_annual(
     request: Request,
     body: dict = Body(
@@ -1829,7 +1835,7 @@ async def submit_self_employment_annual(
     }
 
 
-@router.get("/self-employment-annual", tags=["Self-Employment Business"])
+@router.get("/self-employment-annual", tags=["Self-Employment — Annual Submission"])
 async def get_self_employment_annual(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -1875,4 +1881,319 @@ async def get_self_employment_annual(
         "businessId": business_id,
         "taxYear":    tax_year,
         **data,
+    }
+
+
+@router.delete("/self-employment-annual", tags=["Self-Employment — Annual Submission"])
+async def delete_self_employment_annual(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId for the self-employment income source",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2025-26'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Delete a self-employment annual submission.
+
+    HMRC endpoint:
+        DELETE /individuals/business/self-employment/{nino}/{businessId}/annual/{taxYear}  (v5.0)
+    """
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.delete_self_employment_annual(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "result":     result,
+    }
+
+
+# ── Self-Employment Period Summaries (≤ 2024-25) ───────────────────────────────────
+
+HMRC_SELF_EMPLOYMENT_PERIOD_CREATE_EXAMPLE = {
+    "periodDates": {
+        "periodStartDate": "2024-04-06",
+        "periodEndDate": "2024-07-05",
+    },
+    "periodIncome": {
+        "turnover": 1000.99,
+        "other": 1000.09,
+        "taxTakenOffTradingIncome": 1000.99,
+    },
+    "periodExpenses": {
+        "costOfGoods": 1000.99,
+        "paymentsToSubcontractors": 1000.99,
+        "wagesAndStaffCosts": 1000.99,
+        "carVanTravelExpenses": 1000.99,
+        "premisesRunningCosts": 1000.99,
+        "maintenanceCosts": 1000.99,
+        "adminCosts": 1000.99,
+        "businessEntertainmentCosts": 1000.99,
+        "advertisingCosts": 1000.99,
+        "interestOnBankOtherLoans": 1000.99,
+        "financeCharges": 1000.99,
+        "irrecoverableDebts": 1000.99,
+        "professionalFees": 1000.99,
+        "depreciation": 1000.99,
+        "otherExpenses": 1000.99,
+    },
+}
+
+HMRC_SELF_EMPLOYMENT_PERIOD_AMEND_EXAMPLE = {
+    "periodIncome": {
+        "turnover": 1000.99,
+        "other": 1000.99,
+        "taxTakenOffTradingIncome": 1000.99,
+    },
+    "periodExpenses": {
+        "costOfGoods": 1000.99,
+        "paymentsToSubcontractors": 1000.99,
+        "wagesAndStaffCosts": 1000.99,
+        "carVanTravelExpenses": 1000.99,
+        "premisesRunningCosts": 1000.99,
+        "maintenanceCosts": 1000.99,
+        "adminCosts": 1000.99,
+        "businessEntertainmentCosts": 1000.99,
+        "advertisingCosts": 1000.99,
+        "interestOnBankOtherLoans": 1000.99,
+        "financeCharges": 1000.99,
+        "irrecoverableDebts": 1000.99,
+        "professionalFees": 1000.99,
+        "depreciation": 1000.99,
+        "otherExpenses": 1000.99,
+    },
+}
+
+
+@router.post(
+    "/self-employment-period",
+    tags=["Self-Employment — Period Summaries"],
+)
+async def create_self_employment_period(
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC create period body: periodDates, periodIncome, periodExpenses "
+            "(optional periodDisallowableExpenses). Tax year ≤ 2024-25 only."
+        ),
+        openapi_examples={
+            "hmrc_example": {
+                "summary": "Non-consolidated period create",
+                "value": HMRC_SELF_EMPLOYMENT_PERIOD_CREATE_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId for the self-employment income source",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Create a self-employment period summary (tax years 2024-25 or earlier).
+
+    From 2025-26 use PUT /self-employment-cumulative instead.
+
+    HMRC endpoint:
+        POST /individuals/business/self-employment/{nino}/{businessId}/period  (v5.0)
+    """
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.create_self_employment_period(
+        nino=nino,
+        business_id=business_id,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "businessId": business_id,
+        **data,
+    }
+
+
+@router.get(
+    "/self-employment-period",
+    tags=["Self-Employment — Period Summaries"],
+)
+async def list_self_employment_periods(
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId for the self-employment income source",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25' (period summaries ≤ 2024-25)",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    List self-employment period summaries for a tax year.
+
+    HMRC endpoint:
+        GET /individuals/business/self-employment/{nino}/{businessId}/period/{taxYear}  (v5.0)
+    """
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.list_self_employment_periods(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        **data,
+    }
+
+
+@router.get(
+    "/self-employment-period/{period_id}",
+    tags=["Self-Employment — Period Summaries"],
+)
+async def get_self_employment_period(
+    period_id: str,
+    request: Request,
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId for the self-employment income source",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Retrieve a single self-employment period summary by periodId.
+
+    periodId format from create response, e.g. `2024-04-06_2024-07-05`.
+
+    HMRC endpoint:
+        GET /individuals/business/self-employment/{nino}/{businessId}/period/{taxYear}/{periodId}  (v5.0)
+    """
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    data = await client.retrieve_self_employment_period(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        period_id=period_id,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "nino":       nino,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "periodId":   period_id,
+        **data,
+    }
+
+
+@router.put(
+    "/self-employment-period/{period_id}",
+    tags=["Self-Employment — Period Summaries"],
+)
+async def amend_self_employment_period(
+    period_id: str,
+    request: Request,
+    body: dict = Body(
+        ...,
+        description=(
+            "HMRC amend body: periodIncome, periodExpenses "
+            "(optional periodDisallowableExpenses). No periodDates on amend."
+        ),
+        openapi_examples={
+            "hmrc_example": {
+                "summary": "Amend period income/expenses",
+                "value": HMRC_SELF_EMPLOYMENT_PERIOD_AMEND_EXAMPLE,
+            }
+        },
+    ),
+    x_session_id: Optional[str] = Header(None),
+    business_id: str = Query(
+        ...,
+        alias="businessId",
+        description="businessId for the self-employment income source",
+    ),
+    tax_year: str = Query(
+        ...,
+        alias="taxYear",
+        description="HMRC tax year e.g. '2024-25'",
+    ),
+    gov_test_scenario: Optional[str] = Query(
+        None,
+        alias="govTestScenario",
+        description="Sandbox-only. Sets HMRC Gov-Test-Scenario header. Omit in production.",
+    ),
+):
+    """
+    Amend an existing self-employment period summary.
+
+    HMRC endpoint:
+        PUT /individuals/business/self-employment/{nino}/{businessId}/period/{taxYear}/{periodId}  (v5.0)
+    """
+    session_id = _require_session(x_session_id)
+    _tokens, nino = _require_nino(session_id)
+    client = await _build_client(request, session_id)
+    result = await client.amend_self_employment_period(
+        nino=nino,
+        business_id=business_id,
+        tax_year=tax_year,
+        period_id=period_id,
+        body=body,
+        gov_test_scenario=gov_test_scenario,
+    )
+    return {
+        "success":    True,
+        "businessId": business_id,
+        "taxYear":    tax_year,
+        "periodId":   period_id,
+        "result":     result,
     }
