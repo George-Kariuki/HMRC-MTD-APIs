@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HMRC MTD API Tester</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --ink: #1a2332;
+      --muted: #5c6b7a;
+      --line: #d8dee6;
+      --accent: #00703c;
+      --accent-hover: #005a30;
+      --warn: #8a1538;
+      --ok: #00703c;
+      --get: #1d70b8;
+      --put: #4c2c92;
+      --post: #00703c;
+      --delete: #d4351c;
+      --mono: "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace;
+      --sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin: 0.2rem 0 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .auth-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      align-items: flex-end;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    input, select, textarea, button {
+      font: inherit;
+    }
+
+    input, select, textarea {
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 0.45rem 0.6rem;
+      background: #fff;
+      color: var(--ink);
+      min-width: 10rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      line-height: 1.45;
+      resize: vertical;
+    }
+
+    button {
+      border: none;
+      border-radius: 4px;
+      padding: 0.5rem 0.9rem;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    button.secondary:hover { background: #f0f3f6; }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .chip.ok { color: var(--ok); border-color: #b8e0c8; background: #eef8f1; }
+    .chip.bad { color: var(--warn); border-color: #f0c4cf; background: #fdf0f3; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 0;
+      min-height: calc(100vh - 110px);
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      overflow-y: auto;
+      max-height: calc(100vh - 110px);
+      padding: 0.75rem 0;
+    }
+
+    .group-title {
+      padding: 0.65rem 1rem 0.25rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+
+    .ep {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      color: var(--ink);
+      border: none;
+      border-left: 3px solid transparent;
+      border-radius: 0;
+      padding: 0.55rem 1rem;
+      font-weight: 500;
+      font-size: 0.86rem;
+      line-height: 1.3;
+    }
+    .ep:hover { background: #f0f4f7; }
+    .ep.active {
+      background: #e8f5ee;
+      border-left-color: var(--accent);
+    }
+
+    .method {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      min-width: 2.6rem;
+      margin-top: 0.1rem;
+    }
+    .method.GET { color: var(--get); }
+    .method.PUT { color: var(--put); }
+    .method.POST { color: var(--post); }
+    .method.DELETE { color: var(--delete); }
+
+    .main {
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 1rem;
+    }
+
+    .card h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+    }
+
+    .path-line {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: #f0f3f6;
+      padding: 0.55rem 0.75rem;
+      border-radius: 4px;
+      margin-bottom: 0.85rem;
+      word-break: break-all;
+    }
+
+    .params {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.65rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 0.75rem;
+    }
+
+    .status-row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    pre {
+      margin: 0;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 0.9rem;
+      overflow: auto;
+      max-height: 420px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 2rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>HMRC MTD API Tester</h1>
+      <p>Connect once, click an endpoint, run — for sandbox re-checks before contacting HMRC.</p>
+    </div>
+    <div class="auth-strip">
+      <label>
+        API base
+        <select id="apiBase">
+          <option value="https://hmrc-mtd-ap-is.vercel.app" selected>Vercel (sandbox)</option>
+          <option value="http://localhost:8000">Localhost :8000</option>
+        </select>
+      </label>
+      <label>
+        Session ID
+        <input id="sessionId" placeholder="from Auth flow" autocomplete="off" />
+      </label>
+      <label>
+        NINO
+        <input id="nino" placeholder="AA123456A" autocomplete="off" />
+      </label>
+      <button type="button" id="btnConnect">Connect HMRC</button>
+      <button type="button" class="secondary" id="btnSetNino">Set NINO</button>
+      <span id="authChip" class="chip">Not connected</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="endpointList"></aside>
+    <main class="main">
+      <section class="card" id="runnerCard">
+        <div class="empty" id="emptyState">Select an endpoint from the list.</div>
+        <div id="runner" hidden>
+          <h2 id="epTitle"></h2>
+          <div class="path-line" id="epPath"></div>
+          <div class="params" id="epParams"></div>
+          <label id="bodyLabel">
+            Request body (JSON)
+            <textarea id="epBody" spellcheck="false"></textarea>
+          </label>
+          <div class="actions">
+            <button type="button" id="btnRun">Run request</button>
+            <button type="button" class="secondary" id="btnReset">Reset sample</button>
+          </div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Response</h2>
+        <div class="status-row">
+          <span id="respStatus">—</span>
+          <span id="respTime">—</span>
+        </div>
+        <pre id="respBody">Click Run to see the response.</pre>
+      </section>
+    </main>
+  </div>
+
+  <script src="/tester-assets/tester.js"></script>
+</body>
+</html>

@@ -508,6 +508,116 @@ class HMRCClient:
             return {"message": "Periods of account created/updated successfully."}
         return _json_or_empty(resp)
 
+    async def create_amend_quarterly_period_type(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        PUT /individuals/business/details/{nino}/{businessId}/{taxYear}
+        (Accept v2.0)
+
+        Creates or amends the quarterly period type for a business.
+        Body: {"quarterlyPeriodType": "standard" | "calendar"}
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/details/{nino}"
+                f"/{business_id}/{tax_year}",
+                headers=self._headers(
+                    "2.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Quarterly period type updated successfully."}
+        return _json_or_empty(resp)
+
+    async def retrieve_late_accounting_date_rule(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/details/{nino}/{businessId}/{taxYear}/late-accounting-date-rule-election
+        (Accept v2.0)
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/details/{nino}"
+                f"/{business_id}/{tax_year}/late-accounting-date-rule-election",
+                headers=self._headers(
+                    "2.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def disapply_late_accounting_date_rule(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        POST .../late-accounting-date-rule-election/disapply  (Accept v2.0, no body)
+        Only valid after the tax year has ended.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.base}/individuals/business/details/{nino}"
+                f"/{business_id}/{tax_year}/late-accounting-date-rule-election/disapply",
+                headers=self._headers(
+                    "2.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Late accounting date rule disapplied successfully."}
+        return _json_or_empty(resp)
+
+    async def withdraw_late_accounting_date_rule(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        DELETE .../late-accounting-date-rule-election/withdraw  (Accept v2.0)
+        Only valid after the tax year has ended.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{self.base}/individuals/business/details/{nino}"
+                f"/{business_id}/{tax_year}/late-accounting-date-rule-election/withdraw",
+                headers=self._headers(
+                    "2.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Late accounting date rule withdrawal successful."}
+        return _json_or_empty(resp)
+
     # ── Obligations API ──────────────────────────────────────────────────────────
 
     async def get_obligations(
@@ -782,6 +892,178 @@ class HMRCClient:
                     "6.0",
                     {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
                 ),
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    # ── Foreign Property Details (from 2026-27) ───────────────────────────────────
+
+    async def create_foreign_property_details(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        POST /individuals/business/property/foreign/{nino}/{businessId}/details/{taxYear}
+        (Accept v6.0)
+
+        Creates a foreign property details record. Returns {"propertyId": "<uuid>"}.
+        Tax year 2026-27 onwards only.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/{business_id}/details/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def retrieve_foreign_property_details(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        property_id: Optional[str] = None,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/property/foreign/{nino}/{businessId}/details/{taxYear}
+        (Accept v6.0)
+
+        Optional propertyId query filter. Tax year 2026-27 onwards.
+        """
+        params: dict = {}
+        if property_id:
+            params["propertyId"] = property_id
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/{business_id}/details/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+                params=params or None,
+            )
+        _raise_for_hmrc_error(resp)
+        return _json_or_empty(resp)
+
+    async def update_foreign_property_details(
+        self,
+        nino: str,
+        property_id: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        PUT /individuals/business/property/foreign/{nino}/details/{propertyId}/{taxYear}
+        (Accept v6.0)
+
+        Note: no businessId in this HMRC path. Tax year 2026-27 onwards.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/details/{property_id}/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Foreign property details updated successfully."}
+        return _json_or_empty(resp)
+
+    # ── Foreign Property Cumulative Period Summary ────────────────────────────────
+
+    async def create_or_amend_foreign_property_cumulative(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        body: dict,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        PUT /individuals/business/property/foreign/{nino}/{businessId}/cumulative/{taxYear}
+        (Accept v6.0)
+
+        Creates or amends a foreign property cumulative period summary.
+        Tax year 2025-26 onwards. For 2026-27+, body entries need propertyId.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/{business_id}/cumulative/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {
+                        "Content-Type": "application/json",
+                        **(
+                            {"Gov-Test-Scenario": gov_test_scenario}
+                            if gov_test_scenario
+                            else {}
+                        ),
+                    },
+                ),
+                json=body,
+            )
+        _raise_for_hmrc_error(resp)
+        if resp.status_code == 204:
+            return {"message": "Foreign property cumulative period summary created/amended successfully."}
+        return _json_or_empty(resp)
+
+    async def retrieve_foreign_property_cumulative(
+        self,
+        nino: str,
+        business_id: str,
+        tax_year: str,
+        property_id: Optional[str] = None,
+        gov_test_scenario: Optional[str] = None,
+    ) -> dict:
+        """
+        GET /individuals/business/property/foreign/{nino}/{businessId}/cumulative/{taxYear}
+        (Accept v6.0)
+
+        Optional propertyId query param (required for tax years 2026-27+).
+        """
+        params: dict = {}
+        if property_id:
+            params["propertyId"] = property_id
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.base}/individuals/business/property/foreign"
+                f"/{nino}/{business_id}/cumulative/{tax_year}",
+                headers=self._headers(
+                    "6.0",
+                    {"Gov-Test-Scenario": gov_test_scenario} if gov_test_scenario else None,
+                ),
+                params=params or None,
             )
         _raise_for_hmrc_error(resp)
         return _json_or_empty(resp)

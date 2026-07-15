@@ -24,6 +24,16 @@ HMRC API       Xero API
 
 All OAuth 2.0 complexity lives here — Adalo only calls simple REST endpoints.
 
+### Sandbox re-test UI
+
+Open **`/tester`** (e.g. `https://hmrc-mtd-ap-is.vercel.app/tester` or `http://localhost:8000/tester`) for a one-page tool that:
+
+1. Connects to HMRC (OAuth → session ID) and sets NINO
+2. Lists all HMRC endpoints in HMRC-style groups
+3. Runs each call with prefilled sample bodies and shows status / JSON
+
+Use this within HMRC’s 30-day testing window before requesting another production review.
+
 ---
 
 ## Project Structure
