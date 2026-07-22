@@ -14,6 +14,7 @@ import ipaddress
 import logging
 import os
 import random
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -229,6 +230,40 @@ def build_fraud_headers(client_public_ip: str, client_user_id: str = "none") -> 
 
 # ── Utility ──────────────────────────────────────────────────────────────────────
 
+_TAX_YEAR_RE = re.compile(r"^(\d{4})-(\d{2})$")
+
+
+def parse_tax_year(tax_year: str) -> int:
+    """
+    Validate an HMRC tax year string `YYYY-YY` and return the start calendar year.
+
+    Raises HTTPException(400) for malformed values (never ValueError → 500).
+    Also checks that YY == (YYYY + 1) % 100 (e.g. 2024-25 ok, 2024-99 rejected).
+    """
+    if not isinstance(tax_year, str) or not tax_year.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="taxYear must be a string in YYYY-YY format (e.g. '2024-25').",
+        )
+    match = _TAX_YEAR_RE.fullmatch(tax_year.strip())
+    if not match:
+        raise HTTPException(
+            status_code=400,
+            detail="taxYear must be in YYYY-YY format (e.g. '2024-25').",
+        )
+    start_year = int(match.group(1))
+    end_short = int(match.group(2))
+    if end_short != (start_year + 1) % 100:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"taxYear '{tax_year}' is invalid: the second part must be "
+                f"the start year + 1 (e.g. '2024-25')."
+            ),
+        )
+    return start_year
+
+
 def derive_tax_year(date_str: str) -> str:
     """
     Derive the HMRC tax year string from a date.
@@ -238,7 +273,13 @@ def derive_tax_year(date_str: str) -> str:
           "2024-04-05" → "2023-24"
     """
     from datetime import date
-    d = date.fromisoformat(date_str)
+    try:
+        d = date.fromisoformat(date_str)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid date '{date_str}'. Use YYYY-MM-DD.",
+        )
     start_year = d.year if (d.month > 4 or (d.month == 4 and d.day >= 6)) else d.year - 1
     end_short = str(start_year + 1)[-2:]
     return f"{start_year}-{end_short}"
@@ -246,12 +287,12 @@ def derive_tax_year(date_str: str) -> str:
 
 def tax_year_start_year(tax_year: str) -> int:
     """Return the start calendar year from an HMRC tax year string (e.g. '2025-26' → 2025)."""
-    return int(tax_year.split("-")[0])
+    return parse_tax_year(tax_year)
 
 
 def assert_tax_year_at_least(tax_year: str, minimum: str = "2025-26") -> None:
     """Reject tax years before the HMRC minimum for cumulative / accounting-type endpoints."""
-    if tax_year_start_year(tax_year) < tax_year_start_year(minimum):
+    if parse_tax_year(tax_year) < parse_tax_year(minimum):
         raise HTTPException(
             status_code=400,
             detail=f"taxYear must be {minimum} or later for this endpoint.",
@@ -260,7 +301,7 @@ def assert_tax_year_at_least(tax_year: str, minimum: str = "2025-26") -> None:
 
 def assert_tax_year_at_most(tax_year: str, maximum: str = "2024-25") -> None:
     """Reject tax years after the HMRC maximum for legacy period-summary endpoints."""
-    if tax_year_start_year(tax_year) > tax_year_start_year(maximum):
+    if parse_tax_year(tax_year) > parse_tax_year(maximum):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -276,8 +317,8 @@ def assert_tax_year_in_range(
     maximum: str = "2021-22",
 ) -> None:
     """Reject tax years outside the HMRC historic property submission range."""
-    start = tax_year_start_year(tax_year)
-    if start < tax_year_start_year(minimum) or start > tax_year_start_year(maximum):
+    start = parse_tax_year(tax_year)
+    if start < parse_tax_year(minimum) or start > parse_tax_year(maximum):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -285,6 +326,48 @@ def assert_tax_year_in_range(
                 f"property endpoints. For later years use the standard annual/period APIs."
             ),
         )
+
+
+def assert_historic_period_from_date(from_date: str) -> str:
+    """
+    Derive tax year from fromDate and enforce historic range (2017-18 to 2021-22).
+    Returns the derived tax year string.
+    """
+    tax_year = derive_tax_year(from_date)
+    assert_tax_year_in_range(tax_year)
+    return tax_year
+
+
+def assert_historic_period_body(body: dict) -> str:
+    """Validate historic period create body has fromDate within 2017-18..2021-22."""
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object.")
+    from_date = body.get("fromDate")
+    if not from_date or not isinstance(from_date, str):
+        raise HTTPException(
+            status_code=400,
+            detail="Body must include fromDate in YYYY-MM-DD format.",
+        )
+    to_date = body.get("toDate")
+    if to_date is not None:
+        if not isinstance(to_date, str):
+            raise HTTPException(status_code=400, detail="toDate must be a YYYY-MM-DD string.")
+        derive_tax_year(to_date)  # validates ISO date → 400 if malformed
+    return assert_historic_period_from_date(from_date)
+
+
+def assert_historic_period_id(period_id: str) -> str:
+    """
+    Validate historic periodId (`YYYY-MM-DD_YYYY-MM-DD`) is within 2017-18..2021-22
+    using the start date. Returns the derived tax year string.
+    """
+    if not isinstance(period_id, str) or "_" not in period_id:
+        raise HTTPException(
+            status_code=400,
+            detail="periodId must be in the form YYYY-MM-DD_YYYY-MM-DD.",
+        )
+    start_date = period_id.split("_", 1)[0]
+    return assert_historic_period_from_date(start_date)
 
 
 def _raise_for_hmrc_error(resp: httpx.Response) -> None:

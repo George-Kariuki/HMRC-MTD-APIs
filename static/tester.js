@@ -6,9 +6,23 @@ const STORAGE_KEYS = {
   apiBase: "hmrc_tester_api_base",
   oauthState: "hmrc_tester_oauth_state",
   lastPropertyId: "hmrc_tester_last_property_id",
-  lastSubmissionId: "hmrc_tester_last_submission_id",
-  lastPeriodId: "hmrc_tester_last_period_id",
+  lastUkSubmissionId: "hmrc_tester_last_uk_submission_id",
+  lastForeignSubmissionId: "hmrc_tester_last_foreign_submission_id",
+  lastSePeriodId: "hmrc_tester_last_se_period_id",
+  lastHistFhlPeriodId: "hmrc_tester_last_hist_fhl_period_id",
+  lastHistNonFhlPeriodId: "hmrc_tester_last_hist_non_fhl_period_id",
 };
+
+function submissionStorageKey(epId) {
+  if (epId && epId.startsWith("foreign-")) return STORAGE_KEYS.lastForeignSubmissionId;
+  return STORAGE_KEYS.lastUkSubmissionId;
+}
+
+function periodStorageKey(epId) {
+  if (epId && epId.startsWith("hist-fhl")) return STORAGE_KEYS.lastHistFhlPeriodId;
+  if (epId && epId.startsWith("hist-non-fhl")) return STORAGE_KEYS.lastHistNonFhlPeriodId;
+  return STORAGE_KEYS.lastSePeriodId;
+}
 
 /** Sensitive values use sessionStorage (cleared when the tab closes). */
 function sessionGet(key) {
@@ -252,9 +266,9 @@ const ENDPOINTS = [
   {
     id: "period-submit",
     group: "Property Business — Period Summaries",
-    name: "Create UK period summary",
+    name: "Create a UK Property Income & Expenses Period Summary",
     method: "POST",
-    path: "/submit-periodic",
+    path: "/uk-period",
     needsSession: true,
     needsNino: true,
     params: [
@@ -284,9 +298,9 @@ const ENDPOINTS = [
   {
     id: "period-amend",
     group: "Property Business — Period Summaries",
-    name: "Amend UK period summary",
+    name: "Amend a UK Property Income & Expenses Period Summary",
     method: "PUT",
-    path: "/period-summary",
+    path: "/uk-period",
     needsSession: true,
     needsNino: true,
     params: [
@@ -315,25 +329,25 @@ const ENDPOINTS = [
   {
     id: "period-get",
     group: "Property Business — Period Summaries",
-    name: "Retrieve UK period summary",
+    name: "Retrieve a UK Property Income & Expenses Period Summary",
     method: "GET",
-    path: "/period-summary",
+    path: "/uk-period",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2024-25" },
       { key: "submissionId", label: "submissionId", default: "" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "UK_PROPERTY" },
     ],
     sampleBody: null,
   },
   {
     id: "period-list",
     group: "Property Business — Period Summaries",
-    name: "List period summaries (UK or foreign)",
+    name: "List Property Income and Expenses Period Summaries",
     method: "GET",
-    path: "/period-summaries",
+    path: "/property-period-summaries",
     needsSession: true,
     needsNino: true,
     params: [
@@ -346,7 +360,7 @@ const ENDPOINTS = [
   {
     id: "foreign-period-create",
     group: "Property Business — Period Summaries",
-    name: "Create foreign period summary",
+    name: "Create a Foreign Property Income & Expenses Period Summary",
     method: "POST",
     path: "/foreign-period",
     needsSession: true,
@@ -388,7 +402,7 @@ const ENDPOINTS = [
   {
     id: "foreign-period-get",
     group: "Property Business — Period Summaries",
-    name: "Retrieve foreign period summary",
+    name: "Retrieve a Foreign Property Income & Expenses Period Summary",
     method: "GET",
     path: "/foreign-period",
     needsSession: true,
@@ -397,14 +411,14 @@ const ENDPOINTS = [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2024-25" },
       { key: "submissionId", label: "submissionId", default: "" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "FOREIGN_PROPERTY" },
     ],
     sampleBody: null,
   },
   {
     id: "foreign-period-amend",
     group: "Property Business — Period Summaries",
-    name: "Amend foreign period summary",
+    name: "Amend a Foreign Property Income & Expenses Period Summary",
     method: "PUT",
     path: "/foreign-period",
     needsSession: true,
@@ -447,7 +461,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-annual-put",
     group: "Property Business — Historic",
-    name: "Create/amend historic FHL annual",
+    name: "Create and Amend a Historic FHL UK Property Business Annual Submission",
     method: "PUT",
     path: "/historic-fhl-annual",
     needsSession: true,
@@ -477,7 +491,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-annual-get",
     group: "Property Business — Historic",
-    name: "Retrieve historic FHL annual",
+    name: "Retrieve a Historic FHL UK Property Business Annual Submission",
     method: "GET",
     path: "/historic-fhl-annual",
     needsSession: true,
@@ -491,21 +505,21 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-annual-delete",
     group: "Property Business — Historic",
-    name: "Delete historic FHL annual",
+    name: "Delete a Historic FHL UK Property Business Annual Submission",
     method: "DELETE",
     path: "/historic-fhl-annual",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "taxYear", label: "taxYear", default: "2021-22" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "DELETE" },
     ],
     sampleBody: null,
   },
   {
     id: "hist-non-fhl-annual-put",
     group: "Property Business — Historic",
-    name: "Create/amend historic Non-FHL annual",
+    name: "Create and Amend a Historic Non-FHL UK Property Business Annual Submission",
     method: "PUT",
     path: "/historic-non-fhl-annual",
     needsSession: true,
@@ -536,7 +550,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-annual-get",
     group: "Property Business — Historic",
-    name: "Retrieve historic Non-FHL annual",
+    name: "Retrieve a Historic Non-FHL UK Property Business Annual Submission",
     method: "GET",
     path: "/historic-non-fhl-annual",
     needsSession: true,
@@ -550,21 +564,21 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-annual-delete",
     group: "Property Business — Historic",
-    name: "Delete historic Non-FHL annual",
+    name: "Delete a Historic Non-FHL UK Property Business Annual Submission",
     method: "DELETE",
     path: "/historic-non-fhl-annual",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "taxYear", label: "taxYear", default: "2021-22" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "DELETE" },
     ],
     sampleBody: null,
   },
   {
     id: "hist-fhl-period-list",
     group: "Property Business — Historic",
-    name: "List historic FHL periods",
+    name: "List Historic FHL UK property Income & Expenses Period Summaries",
     method: "GET",
     path: "/historic-fhl-period",
     needsSession: true,
@@ -575,7 +589,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-period-create",
     group: "Property Business — Historic",
-    name: "Create historic FHL period",
+    name: "Create a Historic FHL UK Property Income & Expenses Period Summary",
     method: "POST",
     path: "/historic-fhl-period",
     needsSession: true,
@@ -604,7 +618,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-period-get",
     group: "Property Business — Historic",
-    name: "Retrieve historic FHL period",
+    name: "Retrieve a Historic FHL UK Property Income & Expenses Period Summary",
     method: "GET",
     path: "/historic-fhl-period/{periodId}",
     needsSession: true,
@@ -618,7 +632,7 @@ const ENDPOINTS = [
   {
     id: "hist-fhl-period-amend",
     group: "Property Business — Historic",
-    name: "Amend historic FHL period",
+    name: "Amend a Historic FHL UK Property Income & Expenses Period Summary",
     method: "PUT",
     path: "/historic-fhl-period/{periodId}",
     needsSession: true,
@@ -648,7 +662,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-period-list",
     group: "Property Business — Historic",
-    name: "List historic Non-FHL periods",
+    name: "List Historic Non-FHL UK Property Income & Expenses Period Summaries",
     method: "GET",
     path: "/historic-non-fhl-period",
     needsSession: true,
@@ -659,7 +673,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-period-create",
     group: "Property Business — Historic",
-    name: "Create historic Non-FHL period",
+    name: "Create a Historic Non-FHL UK Property Income & Expenses Period Summary",
     method: "POST",
     path: "/historic-non-fhl-period",
     needsSession: true,
@@ -693,7 +707,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-period-get",
     group: "Property Business — Historic",
-    name: "Retrieve historic Non-FHL period",
+    name: "Retrieve a Historic Non-FHL UK Property Income and Expenses Period Summary",
     method: "GET",
     path: "/historic-non-fhl-period/{periodId}",
     needsSession: true,
@@ -707,7 +721,7 @@ const ENDPOINTS = [
   {
     id: "hist-non-fhl-period-amend",
     group: "Property Business — Historic",
-    name: "Amend historic Non-FHL period",
+    name: "Amend a Historic Non-FHL UK Property Income & Expenses Period Summary",
     method: "PUT",
     path: "/historic-non-fhl-period/{periodId}",
     needsSession: true,
@@ -744,15 +758,15 @@ const ENDPOINTS = [
   {
     id: "uk-cum-put",
     group: "Property Business — UK Cumulative",
-    name: "Create/amend UK cumulative",
+    name: "Create or Amend a UK Property Cumulative Period Summary",
     method: "PUT",
-    path: "/property-cumulative",
+    path: "/uk-cumulative",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       from_date: "2025-04-06",
@@ -775,15 +789,15 @@ const ENDPOINTS = [
   {
     id: "uk-cum-get",
     group: "Property Business — UK Cumulative",
-    name: "Retrieve UK cumulative",
+    name: "Retrieve a UK Property Cumulative Period Summary",
     method: "GET",
-    path: "/property-cumulative",
+    path: "/uk-cumulative",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
   },
@@ -792,9 +806,9 @@ const ENDPOINTS = [
   {
     id: "annual-put",
     group: "Property Business — Annual Submission",
-    name: "Create/amend UK annual",
+    name: "Create and Amend a UK Property Business Annual Submission",
     method: "PUT",
-    path: "/submit-annual",
+    path: "/uk-annual",
     needsSession: true,
     needsNino: true,
     params: [
@@ -819,22 +833,22 @@ const ENDPOINTS = [
   {
     id: "annual-get",
     group: "Property Business — Annual Submission",
-    name: "Retrieve UK annual",
+    name: "Retrieve a UK Property Business Annual Submission",
     method: "GET",
-    path: "/annual-submission",
+    path: "/uk-annual",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "UK_PROPERTY" },
     ],
     sampleBody: null,
   },
   {
     id: "foreign-annual-put",
     group: "Property Business — Annual Submission",
-    name: "Create/amend foreign annual",
+    name: "Create and Amend a Foreign Property Annual Submission",
     method: "PUT",
     path: "/foreign-annual",
     needsSession: true,
@@ -857,7 +871,7 @@ const ENDPOINTS = [
   {
     id: "foreign-annual-get",
     group: "Property Business — Annual Submission",
-    name: "Retrieve foreign annual",
+    name: "Retrieve a Foreign Property Annual Submission",
     method: "GET",
     path: "/foreign-annual",
     needsSession: true,
@@ -865,16 +879,16 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2025-26" },
-      { key: "govTestScenario", label: "govTestScenario", default: "" },
+      { key: "govTestScenario", label: "govTestScenario", default: "FOREIGN_PROPERTY" },
     ],
     sampleBody: null,
   },
   {
     id: "annual-delete",
     group: "Property Business — Annual Submission",
-    name: "Delete property annual (UK or foreign)",
+    name: "Delete a Property Annual Submission",
     method: "DELETE",
-    path: "/annual-submission",
+    path: "/property-annual",
     needsSession: true,
     needsNino: true,
     params: [
@@ -889,7 +903,7 @@ const ENDPOINTS = [
   {
     id: "fpd-create",
     group: "Property Business — Foreign Property Details",
-    name: "Create foreign property details",
+    name: "Create Foreign Property Details",
     method: "POST",
     path: "/foreign-property-details",
     needsSession: true,
@@ -897,7 +911,7 @@ const ENDPOINTS = [
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       propertyName: "Bob & Bobby Co",
@@ -907,7 +921,7 @@ const ENDPOINTS = [
   {
     id: "fpd-get",
     group: "Property Business — Foreign Property Details",
-    name: "Retrieve foreign property details",
+    name: "Retrieve Foreign Property Details",
     method: "GET",
     path: "/foreign-property-details",
     needsSession: true,
@@ -916,14 +930,14 @@ const ENDPOINTS = [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
       { key: "propertyId", label: "propertyId", default: "" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
   },
   {
     id: "fpd-put",
     group: "Property Business — Foreign Property Details",
-    name: "Update foreign property details",
+    name: "Update Foreign Property Details",
     method: "PUT",
     path: "/foreign-property-details/{propertyId}",
     needsSession: true,
@@ -931,7 +945,7 @@ const ENDPOINTS = [
     params: [
       { key: "propertyId", label: "propertyId (path)", default: "8e8b8450-dc1b-4360-8109-7067337b42cb", inPath: true },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       propertyName: "Bob & Bobby Co",
@@ -942,15 +956,15 @@ const ENDPOINTS = [
   {
     id: "fp-cum-put",
     group: "Property Business — Foreign Cumulative",
-    name: "Create/amend foreign cumulative",
+    name: "Create or Amend a Foreign Property Cumulative Period Summary",
     method: "PUT",
-    path: "/foreign-property-cumulative",
+    path: "/foreign-cumulative",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: {
       fromDate: "2026-04-06",
@@ -984,16 +998,16 @@ const ENDPOINTS = [
   {
     id: "fp-cum-get",
     group: "Property Business — Foreign Cumulative",
-    name: "Retrieve foreign cumulative",
+    name: "Retrieve a Foreign Property Cumulative Period Summary",
     method: "GET",
-    path: "/foreign-property-cumulative",
+    path: "/foreign-cumulative",
     needsSession: true,
     needsNino: true,
     params: [
       { key: "businessId", label: "businessId", default: "XBIS12345678901" },
       { key: "taxYear", label: "taxYear", default: "2026-27" },
       { key: "propertyId", label: "propertyId", default: "8e8b8450-dc1b-4360-8109-7067337b42cb" },
-      { key: "govTestScenario", label: "govTestScenario", default: "STATEFUL" },
+      { key: "govTestScenario", label: "govTestScenario", default: "" },
     ],
     sampleBody: null,
   },
@@ -1300,8 +1314,11 @@ function clearSavedData() {
   sessionStorage.removeItem(STORAGE_KEYS.nino);
   sessionStorage.removeItem(STORAGE_KEYS.oauthState);
   sessionStorage.removeItem(STORAGE_KEYS.lastPropertyId);
-  sessionStorage.removeItem(STORAGE_KEYS.lastSubmissionId);
-  sessionStorage.removeItem(STORAGE_KEYS.lastPeriodId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastUkSubmissionId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastForeignSubmissionId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastSePeriodId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastHistFhlPeriodId);
+  sessionStorage.removeItem(STORAGE_KEYS.lastHistNonFhlPeriodId);
   localStorage.removeItem(STORAGE_KEYS.sessionId);
   localStorage.removeItem(STORAGE_KEYS.nino);
   localStorage.removeItem(STORAGE_KEYS.oauthState);
@@ -1361,11 +1378,11 @@ function selectEndpoint(id) {
       if (savedId) input.value = savedId;
     }
     if (p.key === "periodId") {
-      const savedPeriod = sessionGet(STORAGE_KEYS.lastPeriodId);
+      const savedPeriod = sessionGet(periodStorageKey(ep.id));
       if (savedPeriod) input.value = savedPeriod;
     }
     if (p.key === "submissionId") {
-      const savedSub = sessionGet(STORAGE_KEYS.lastSubmissionId);
+      const savedSub = sessionGet(submissionStorageKey(ep.id));
       if (savedSub) input.value = savedSub;
     }
     label.appendChild(input);
@@ -1478,12 +1495,19 @@ async function runRequest() {
         }
       } catch (_) {}
     }
-    // Auto-store submissionId from property period creates
-    if ((ep.id === "period-submit" || ep.id === "foreign-period-create") && res.ok) {
+    // Auto-store submissionId from property period creates (scoped by family)
+    if (ep.id === "period-submit" && res.ok) {
       try {
         const data = JSON.parse(text);
         const sid = data.submissionId || (data.result && data.result.submissionId);
-        if (sid) sessionSet(STORAGE_KEYS.lastSubmissionId, sid);
+        if (sid) sessionSet(STORAGE_KEYS.lastUkSubmissionId, sid);
+      } catch (_) {}
+    }
+    if (ep.id === "foreign-period-create" && res.ok) {
+      try {
+        const data = JSON.parse(text);
+        const sid = data.submissionId || (data.result && data.result.submissionId);
+        if (sid) sessionSet(STORAGE_KEYS.lastForeignSubmissionId, sid);
       } catch (_) {}
     }
     // Auto-store periodId from SE period create
@@ -1491,19 +1515,23 @@ async function runRequest() {
       try {
         const data = JSON.parse(text);
         if (data.periodId) {
-          sessionSet(STORAGE_KEYS.lastPeriodId, data.periodId);
+          sessionSet(STORAGE_KEYS.lastSePeriodId, data.periodId);
         }
       } catch (_) {}
     }
     // Auto-store periodId from historic property period creates
-    if (
-      (ep.id === "hist-fhl-period-create" || ep.id === "hist-non-fhl-period-create") &&
-      res.ok
-    ) {
+    if (ep.id === "hist-fhl-period-create" && res.ok) {
       try {
         const data = JSON.parse(text);
         const pid = data.periodId || (data.result && data.result.periodId);
-        if (pid) sessionSet(STORAGE_KEYS.lastPeriodId, pid);
+        if (pid) sessionSet(STORAGE_KEYS.lastHistFhlPeriodId, pid);
+      } catch (_) {}
+    }
+    if (ep.id === "hist-non-fhl-period-create" && res.ok) {
+      try {
+        const data = JSON.parse(text);
+        const pid = data.periodId || (data.result && data.result.periodId);
+        if (pid) sessionSet(STORAGE_KEYS.lastHistNonFhlPeriodId, pid);
       } catch (_) {}
     }
   } catch (err) {

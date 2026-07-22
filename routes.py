@@ -22,6 +22,8 @@ from auth import get_valid_access_token
 from database import get_tokens, update_nino
 from hmrc_client import (
     HMRCClient,
+    assert_historic_period_body,
+    assert_historic_period_id,
     assert_tax_year_at_least,
     assert_tax_year_at_most,
     assert_tax_year_in_range,
@@ -202,7 +204,7 @@ async def obligations(
     that match the official API). NINO comes from the session (`POST /auth/set-nino`).
 
     The periodStartDate and periodEndDate in each obligation MUST be passed
-    as start_date / end_date when calling POST /submit-periodic.
+    as start_date / end_date when calling POST /uk-period.
 
     HMRC endpoint:  GET /obligations/details/{nino}/income-and-expenditure  (v3.0)
     """
@@ -352,7 +354,31 @@ class PeriodicAmountsBody(BaseModel):
     travel_costs:               float = Field(0.0, description="Travel costs")
 
 
-def _uk_period_income_expenses(amounts: PeriodicAmountsBody) -> tuple[dict, dict]:
+def _uk_period_income_expenses(
+    amounts: PeriodicAmountsBody,
+    property_type: str = "ukNonFhlProperty",
+) -> tuple[dict, dict]:
+    """
+    Map PeriodicAmountsBody to HMRC income/expenses.
+    ukFhlProperty omits non-FHL-only fields (premiumsOfLeaseGrant, reversePremiums,
+    otherIncome, residentialFinancialCost).
+    """
+    if property_type == "ukFhlProperty":
+        income = {
+            "periodAmount": round(amounts.rent_income, 2),
+            "taxDeducted":  round(amounts.tax_deducted, 2),
+        }
+        expenses = {
+            "premisesRunningCosts":  round(amounts.premises_running_costs, 2),
+            "repairsAndMaintenance": round(amounts.repairs_and_maintenance, 2),
+            "financialCosts":        round(amounts.financial_costs, 2),
+            "professionalFees":      round(amounts.professional_fees, 2),
+            "costOfServices":        round(amounts.cost_of_services, 2),
+            "other":                 round(amounts.other_expenses, 2),
+            "travelCosts":           round(amounts.travel_costs, 2),
+        }
+        return income, expenses
+
     income = {
         "periodAmount":         round(amounts.rent_income, 2),
         "premiumsOfLeaseGrant": round(amounts.premiums_of_lease_grant, 2),
@@ -430,7 +456,7 @@ HMRC_FOREIGN_PERIOD_AMEND_EXAMPLE = {
 }
 
 
-@router.post("/submit-periodic", tags=["Property Business — Period Summaries"])
+@router.post("/uk-period", tags=["Property Business — Period Summaries"])
 async def submit_periodic(
     amounts: PeriodicAmountsBody,
     request: Request,
@@ -469,8 +495,8 @@ async def submit_periodic(
     """
     Create a UK property income & expenses period summary (tax years ≤ 2024-25).
 
-    From 2025-26 use PUT /property-cumulative instead.
-    To amend an existing submission use PUT /period-summary.
+    From 2025-26 use PUT /uk-cumulative instead.
+    To amend an existing submission use PUT /uk-period.
 
     HMRC endpoint:
         POST /individuals/business/property/uk/{nino}/{businessId}/period/{taxYear}  (v6.0)
@@ -481,7 +507,7 @@ async def submit_periodic(
     resolved_tax_year = tax_year or derive_tax_year(start_date)
     assert_tax_year_at_most(resolved_tax_year)
 
-    income, expenses = _uk_period_income_expenses(amounts)
+    income, expenses = _uk_period_income_expenses(amounts, property_type)
     client = await _build_client(request, session_id)
     result = await client.create_period_summary(
         nino=nino,
@@ -505,7 +531,7 @@ async def submit_periodic(
     }
 
 
-@router.put("/period-summary", tags=["Property Business — Period Summaries"])
+@router.put("/uk-period", tags=["Property Business — Period Summaries"])
 async def amend_period_summary(
     amounts: PeriodicAmountsBody,
     request: Request,
@@ -523,7 +549,7 @@ async def amend_period_summary(
     submission_id: str = Query(
         ...,
         alias="submissionId",
-        description="submissionId from POST /submit-periodic or GET /period-summaries",
+        description="submissionId from POST /uk-period or GET /property-period-summaries",
     ),
     property_type: str = Query(
         "ukNonFhlProperty",
@@ -547,7 +573,7 @@ async def amend_period_summary(
     assert_tax_year_at_most(tax_year)
     session_id = _require_session(x_session_id)
     tokens, nino = _require_nino(session_id)
-    income, expenses = _uk_period_income_expenses(amounts)
+    income, expenses = _uk_period_income_expenses(amounts, property_type)
     client = await _build_client(request, session_id)
     result = await client.amend_period_summary(
         nino=nino,
@@ -608,7 +634,7 @@ async def periods_of_account(
     Retrieve the accounting periods available for a business in a given tax year.
 
     Use the period start and end dates returned here as the valid fromDate / toDate
-    boundaries when calling PUT /property-cumulative or PUT /self-employment-cumulative.
+    boundaries when calling PUT /uk-cumulative or PUT /self-employment-cumulative.
 
     HMRC endpoint:
         GET /individuals/business/details/{nino}/{businessId}/{taxYear}/periods-of-account  (v2.0)
@@ -1032,7 +1058,7 @@ HMRC_FOREIGN_ANNUAL_SUBMISSION_2026_EXAMPLE = {
 }
 
 
-@router.put("/submit-annual", tags=["Property Business — Annual Submission"])
+@router.put("/uk-annual", tags=["Property Business — Annual Submission"])
 async def submit_annual(
     request: Request,
     body: dict = Body(
@@ -1086,7 +1112,7 @@ async def submit_annual(
     return {"success": True, "taxYear": tax_year, "businessId": business_id, "result": result}
 
 
-@router.get("/annual-submission", tags=["Property Business — Annual Submission"])
+@router.get("/uk-annual", tags=["Property Business — Annual Submission"])
 async def get_annual_submission(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -1236,7 +1262,7 @@ async def get_foreign_annual(
     }
 
 
-@router.delete("/annual-submission", tags=["Property Business — Annual Submission"])
+@router.delete("/property-annual", tags=["Property Business — Annual Submission"])
 async def delete_annual_submission(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -1283,7 +1309,7 @@ async def delete_annual_submission(
     }
 
 
-@router.get("/period-summary", tags=["Property Business — Period Summaries"])
+@router.get("/uk-period", tags=["Property Business — Period Summaries"])
 async def get_period_summary(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -1300,7 +1326,7 @@ async def get_period_summary(
     submission_id: str = Query(
         ...,
         alias="submissionId",
-        description="submissionId from POST /submit-periodic or GET /period-summaries",
+        description="submissionId from POST /uk-period or GET /property-period-summaries",
     ),
     gov_test_scenario: Optional[str] = Query(
         None,
@@ -1338,7 +1364,7 @@ async def get_period_summary(
     }
 
 
-@router.get("/period-summaries", tags=["Property Business — Period Summaries"])
+@router.get("/property-period-summaries", tags=["Property Business — Period Summaries"])
 async def list_period_summaries(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -1419,7 +1445,7 @@ async def create_foreign_period(
     """
     Create a foreign property income & expenses period summary (≤ 2024-25).
 
-    From 2025-26 use PUT /foreign-property-cumulative instead.
+    From 2025-26 use PUT /foreign-cumulative instead.
 
     HMRC endpoint:
         POST /individuals/business/property/foreign/{nino}/{businessId}/period/{taxYear}  (v6.0)
@@ -1461,7 +1487,7 @@ async def get_foreign_period(
     submission_id: str = Query(
         ...,
         alias="submissionId",
-        description="submissionId from POST /foreign-period or GET /period-summaries",
+        description="submissionId from POST /foreign-period or GET /property-period-summaries",
     ),
     gov_test_scenario: Optional[str] = Query(
         None,
@@ -1525,7 +1551,7 @@ async def amend_foreign_period(
     submission_id: str = Query(
         ...,
         alias="submissionId",
-        description="submissionId from POST /foreign-period or GET /period-summaries",
+        description="submissionId from POST /foreign-period or GET /property-period-summaries",
     ),
     gov_test_scenario: Optional[str] = Query(
         None,
@@ -1852,6 +1878,7 @@ async def create_historic_fhl_period(
     gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
 ):
     """Create historic FHL period. Returns periodId. HMRC: POST .../furnished-holiday-lettings/{nino}"""
+    assert_historic_period_body(body)
     session_id = _require_session(x_session_id)
     _tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -1869,6 +1896,7 @@ async def get_historic_fhl_period(
     gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
 ):
     """Retrieve historic FHL period. periodId e.g. 2019-04-06_2019-07-05"""
+    assert_historic_period_id(period_id)
     session_id = _require_session(x_session_id)
     _tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -1899,6 +1927,7 @@ async def amend_historic_fhl_period(
     gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
 ):
     """Amend historic FHL period. HMRC: PUT .../furnished-holiday-lettings/{nino}/{periodId}"""
+    assert_historic_period_id(period_id)
     session_id = _require_session(x_session_id)
     _tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -1941,6 +1970,7 @@ async def create_historic_non_fhl_period(
     gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
 ):
     """Create historic Non-FHL period. Returns periodId."""
+    assert_historic_period_body(body)
     session_id = _require_session(x_session_id)
     _tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -1958,6 +1988,7 @@ async def get_historic_non_fhl_period(
     gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
 ):
     """Retrieve historic Non-FHL period."""
+    assert_historic_period_id(period_id)
     session_id = _require_session(x_session_id)
     _tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -1985,6 +2016,7 @@ async def amend_historic_non_fhl_period(
     gov_test_scenario: Optional[str] = Query(None, alias="govTestScenario"),
 ):
     """Amend historic Non-FHL period."""
+    assert_historic_period_id(period_id)
     session_id = _require_session(x_session_id)
     _tokens, nino = _require_nino(session_id)
     client = await _build_client(request, session_id)
@@ -2052,7 +2084,7 @@ class PropertyIncomeBody(BaseModel):
     travel_costs: float               = Field(0.0, description="Travel costs (YTD)")
 
 
-@router.put("/property-cumulative", tags=["Property Business — UK Cumulative"])
+@router.put("/uk-cumulative", tags=["Property Business — UK Cumulative"])
 async def submit_property_cumulative(
     amounts: PropertyIncomeBody,
     request: Request,
@@ -2123,7 +2155,7 @@ async def submit_property_cumulative(
     }
 
 
-@router.get("/property-cumulative", tags=["Property Business — UK Cumulative"])
+@router.get("/uk-cumulative", tags=["Property Business — UK Cumulative"])
 async def get_property_cumulative(
     request: Request,
     x_session_id: Optional[str] = Header(None),
@@ -2403,7 +2435,7 @@ HMRC_FOREIGN_PROPERTY_CUMULATIVE_2025_EXAMPLE = {
 }
 
 
-@router.put("/foreign-property-cumulative", tags=["Property Business — Foreign Cumulative"])
+@router.put("/foreign-cumulative", tags=["Property Business — Foreign Cumulative"])
 async def submit_foreign_property_cumulative(
     request: Request,
     body: dict = Body(
@@ -2467,7 +2499,7 @@ async def submit_foreign_property_cumulative(
     }
 
 
-@router.get("/foreign-property-cumulative", tags=["Property Business — Foreign Cumulative"])
+@router.get("/foreign-cumulative", tags=["Property Business — Foreign Cumulative"])
 async def get_foreign_property_cumulative(
     request: Request,
     x_session_id: Optional[str] = Header(None),
